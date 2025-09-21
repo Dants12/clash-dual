@@ -1,24 +1,41 @@
 import React from 'react';
-import Panel from '../ui/Panel';
+import { Badge, type BadgeTone } from '../ui/Badge';
+import { MetricRow } from '../ui/MetricRow';
 
+const phaseTone: Record<string, BadgeTone> = {
+  betting: 'info',
+  running: 'success',
+  resolve: 'warning',
+  crash: 'danger',
+  intermission: 'neutral'
+};
 
-export default function DuelABPanel({micro, winner, phase}:{micro:any; winner?:'A'|'B'; phase:string}){
-return (
-<Panel title="Duel A vs B">
-<div className="row" style={{gap:16}}>
-<div style={{flex:1}}>
-<b>A</b>
-<div className="muted">Speed: {micro?.A?.speed||0}</div>
-<div className="muted">Defense: {micro?.A?.defense||0}</div>
-</div>
-<div style={{flex:1}}>
-<b>B</b>
-<div className="muted">Speed: {micro?.B?.speed||0}</div>
-<div className="muted">Defense: {micro?.B?.defense||0}</div>
-</div>
-</div>
-<div className="space" />
-<div className="muted">Phase: {phase} {winner?`• Winner: ${winner}`:''}</div>
-</Panel>
-);
+interface DuelABPanelProps {
+  micro: { A: { speed: number; defense: number }; B: { speed: number; defense: number } };
+  winner?: 'A' | 'B';
+  phase: string;
+}
+
+export default function DuelABPanel({ micro, winner, phase }: DuelABPanelProps) {
+  return (
+    <div className="duel-arena">
+      <div className="duel-arena-row">
+        {(['A', 'B'] as const).map((side) => (
+          <div key={side} className="duel-arena-side">
+            <Badge tone="info">Side {side}</Badge>
+            <MetricRow label="Speed" value={micro?.[side]?.speed ?? 0} />
+            <MetricRow label="Defense" value={micro?.[side]?.defense ?? 0} />
+          </div>
+        ))}
+      </div>
+      <div className="duel-arena-status">
+        <Badge tone={phaseTone[phase] ?? 'neutral'}>Phase: {phase}</Badge>
+        {winner ? (
+          <Badge tone="success">Winner: {winner}</Badge>
+        ) : (
+          <Badge tone="neutral">Awaiting result</Badge>
+        )}
+      </div>
+    </div>
+  );
 }
