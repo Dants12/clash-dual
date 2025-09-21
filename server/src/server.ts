@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuid } from 'uuid';
-import { GameMode, ClientMsg, ServerMsg, Snapshot, Bet } from './types.js';
+import { GameMode, ClientMsg, ServerMsg, Snapshot, Bet, CrashRound } from './types.js';
 import { newCrashRound, tickCrash, transitionCrash, addBetCrash, canBet as canBetCrash } from './game_crash_dual.js';
 import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 
@@ -88,6 +88,7 @@ function placeBet(uid: string, amount: number, side?: 'A'|'B') {
 
 // Game loop
 setInterval(() => {
+  let nextCrash: CrashRound | null = null;
   if (mode === 'crash_dual') {
     transitionCrash(crash);
     if (crash.phase === 'running') tickCrash(crash);
@@ -106,10 +107,12 @@ setInterval(() => {
           }
         }
       }
+      crash.burned = burned;
+      crash.payouts = payouts;
       bankroll += burned - payouts;
       jackpot += Math.max(0, burned * 0.01);
       rounds += 1;
-      crash = newCrashRound();
+      nextCrash = newCrashRound();
     }
   } else {
     transitionDuel(duel);
@@ -129,6 +132,7 @@ setInterval(() => {
     }
   }
   broadcast({ t: 'snapshot', snapshot: snapshot() });
+  if (nextCrash) crash = nextCrash;
 }, 100);
 
 // WS server
