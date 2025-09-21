@@ -11,6 +11,8 @@ let bankroll = 100000;
 let jackpot = 0;
 let rtpAvg = 0;
 let rounds = 0;
+let rtpSum = 0;
+let rtpRounds = 0;
 
 let crash = newCrashRound();
 let duel = newDuelRound();
@@ -111,6 +113,15 @@ setInterval(() => {
       crash.payouts = payouts;
       bankroll += burned - payouts;
       jackpot += Math.max(0, burned * 0.01);
+      const totalWagered =
+        crash.betsA.reduce((sum, bet) => sum + bet.amount, 0) +
+        crash.betsB.reduce((sum, bet) => sum + bet.amount, 0);
+      const roundRtp = totalWagered > 0 ? (payouts / totalWagered) * 100 : 0;
+      if (totalWagered > 0) {
+        rtpSum += roundRtp;
+        rtpRounds += 1;
+        rtpAvg = rtpSum / rtpRounds;
+      }
       rounds += 1;
       nextCrash = newCrashRound();
     }
@@ -121,12 +132,20 @@ setInterval(() => {
       const winners = duel.bets.filter(b => b.side === duel.winner);
       const winPool = burned * 0.98;
       const tot = winners.reduce((s,b)=> s + b.amount, 0) || 1;
+      let roundPayouts = 0;
       for (const b of winners) {
         const payout = (b.amount / tot) * winPool;
+        roundPayouts += payout;
         pay(b.uid, payout);
         bankroll -= payout;
       }
       jackpot += burned * 0.01;
+      const roundRtp = burned > 0 ? (roundPayouts / burned) * 100 : 0;
+      if (burned > 0) {
+        rtpSum += roundRtp;
+        rtpRounds += 1;
+        rtpAvg = rtpSum / rtpRounds;
+      }
       rounds += 1;
       duel = newDuelRound();
     }
