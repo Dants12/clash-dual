@@ -28,11 +28,11 @@ const formatMode = (mode: GameMode) => (mode === 'crash_dual' ? 'Crash Dual' : '
 const eventId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const phaseToneMap: Record<string, BadgeTone> = {
-  betting: 'info',
+  betting: 'primary',
   running: 'success',
   resolve: 'warning',
   crash: 'danger',
-  intermission: 'neutral'
+  intermission: 'muted'
 };
 
 export default function App() {
@@ -169,7 +169,7 @@ export default function App() {
   }, [duelRound]);
 
   const activePhase = mode === 'crash_dual' ? crashRound?.phase : duelRound?.phase;
-  const phaseTone = activePhase ? phaseToneMap[activePhase] ?? 'neutral' : 'neutral';
+  const phaseTone = activePhase ? phaseToneMap[activePhase] ?? 'muted' : 'muted';
   const modeLabel = formatMode(mode);
 
   const sanitizedAmount = Number.isFinite(amount) ? amount : 0;
@@ -247,17 +247,18 @@ export default function App() {
       <header className="app-header">
         <div className="app-header__title">
           <h1>Clash Demo</h1>
-          <span className="muted">Realtime crash &amp; duel playground</span>
+          <span className="text-muted">Realtime crash &amp; duel playground</span>
         </div>
         <div className="app-header__badges">
           <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
-          <Badge tone="info">Mode · {modeLabel}</Badge>
+          <Badge tone="primary">Mode · {modeLabel}</Badge>
           <Badge tone={phaseTone}>Phase · {activePhase ?? '—'}</Badge>
-          <Badge tone="neutral">Rounds · {snap?.rounds ?? 0}</Badge>
+          <Badge tone="muted">Rounds · {snap?.rounds ?? 0}</Badge>
         </div>
         <div className="app-header__controls">
           <div className="segmented">
             <button
+              className="button button--muted"
               type="button"
               data-active={mode === 'crash_dual'}
               onClick={() => switchMode('crash_dual')}
@@ -266,6 +267,7 @@ export default function App() {
               Crash
             </button>
             <button
+              className="button button--muted"
               type="button"
               data-active={mode === 'duel_ab'}
               onClick={() => switchMode('duel_ab')}
@@ -302,24 +304,44 @@ export default function App() {
                 />
               </div>
               <div className="segmented segmented--spread">
-                <button type="button" data-active={side === 'A'} onClick={() => setSide('A')}>
+                <button
+                  className="button button--muted"
+                  type="button"
+                  data-active={side === 'A'}
+                  onClick={() => setSide('A')}
+                >
                   Side A
                 </button>
-                <button type="button" data-active={side === 'B'} onClick={() => setSide('B')}>
+                <button
+                  className="button button--muted"
+                  type="button"
+                  data-active={side === 'B'}
+                  onClick={() => setSide('B')}
+                >
                   Side B
                 </button>
               </div>
               <div className="button-row">
-                <button type="button" onClick={placeBet} disabled={!canPlaceBet}>
+                <button
+                  className="button button--primary"
+                  type="button"
+                  onClick={placeBet}
+                  disabled={!canPlaceBet}
+                >
                   Place bet
                 </button>
                 {mode === 'crash_dual' && (
-                  <button type="button" onClick={cashout} disabled={!canCashout}>
+                  <button
+                    className="button button--secondary"
+                    type="button"
+                    onClick={cashout}
+                    disabled={!canCashout}
+                  >
                     Cash out
                   </button>
                 )}
               </div>
-              <span className="muted">Betting is available during the betting phase.</span>
+              <span className="text-muted">Betting is available during the betting phase.</span>
             </Card>
 
             <Card title="Micro-bets" subtitle="Fine-tune duel combatants">
@@ -341,12 +363,13 @@ export default function App() {
                 {(['A', 'B'] as const).map((target) => (
                   <div key={target} className="micro-side">
                     <div className="micro-side-header">
-                      <Badge tone="info">Side {target}</Badge>
+                      <Badge tone="secondary">Side {target}</Badge>
                     </div>
                     <div className="micro-stat">
                       <MetricRow label="Speed" value={duelRound?.micro?.[target]?.speed ?? 0} />
                       <div className="micro-controls">
                         <button
+                          className="button button--secondary"
                           type="button"
                           onClick={() => adjustMicro(target, 'speed', microStep)}
                           disabled={!canAdjustMicro}
@@ -354,6 +377,7 @@ export default function App() {
                           +{microStep}
                         </button>
                         <button
+                          className="button button--muted"
                           type="button"
                           onClick={() => adjustMicro(target, 'speed', -microStep)}
                           disabled={!canAdjustMicro}
@@ -366,6 +390,7 @@ export default function App() {
                       <MetricRow label="Defense" value={duelRound?.micro?.[target]?.defense ?? 0} />
                       <div className="micro-controls">
                         <button
+                          className="button button--secondary"
                           type="button"
                           onClick={() => adjustMicro(target, 'defense', microStep)}
                           disabled={!canAdjustMicro}
@@ -373,6 +398,7 @@ export default function App() {
                           +{microStep}
                         </button>
                         <button
+                          className="button button--muted"
                           type="button"
                           onClick={() => adjustMicro(target, 'defense', -microStep)}
                           disabled={!canAdjustMicro}
@@ -410,7 +436,7 @@ export default function App() {
                 <aside className="arena-sidebar">
                   <div className="arena-sidebar-title">Round parameters</div>
                   <div className="arena-parameters">
-                    {parameterMetrics.length === 0 && <span className="muted">Waiting for round data…</span>}
+                    {parameterMetrics.length === 0 && <span className="text-muted">Waiting for round data…</span>}
                     {parameterMetrics.map((metric) => (
                       <MetricRow key={metric.label as string} label={metric.label} value={metric.value} hint={metric.hint} />
                     ))}
@@ -447,13 +473,13 @@ export default function App() {
                 </>
               )}
               {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
-                <span className="muted">Totals will appear when a round begins.</span>
+                <span className="text-muted">Totals will appear when a round begins.</span>
               )}
             </Card>
 
             <Card title="Events" subtitle="Latest activity">
               {events.length === 0 ? (
-                <span className="muted">No events yet. Place a bet to get started.</span>
+                <span className="text-muted">No events yet. Place a bet to get started.</span>
               ) : (
                 <ul className="event-list">
                   {events.map((entry) => (
