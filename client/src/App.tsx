@@ -3,7 +3,7 @@ import Panel from './ui/Panel';
 import { Meter } from './ui/Meter';
 import CrashDualCanvas from './games/CrashDualCanvas';
 import DuelABPanel from './games/DuelABPanel';
-import { createWS } from './ws';
+import { createWS, persistUid } from './ws';
 
 
 export default function App(){
@@ -17,7 +17,16 @@ const [side, setSide] = useState<'A'|'B'>('A');
 
 useEffect(() => {
 const socket = createWS((m:any) => {
-if (m.t === 'hello') { uid.current = m.uid; setWallet(m.wallet.balance); setSnap(m.snapshot); }
+if (m.t === 'hello') {
+if (typeof m.uid === 'string') {
+persistUid(m.uid);
+uid.current = m.uid;
+} else {
+uid.current = '';
+}
+setWallet(m.wallet.balance);
+setSnap(m.snapshot);
+}
 else if (m.t === 'wallet') { setWallet(m.wallet.balance); }
 else if (m.t === 'snapshot') { setSnap(m.snapshot); }
 });
