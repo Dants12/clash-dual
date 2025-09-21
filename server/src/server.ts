@@ -71,14 +71,16 @@ function tryCashoutCrash(uid: string) {
 
 function placeBet(uid: string, amount: number, side?: 'A'|'B') {
   if ((wallets.get(uid) ?? 0) < amount) return false;
-  pay(uid, -amount);
+
   if (mode === 'crash_dual') {
     if (!canBetCrash(crash)) return false;
     const bet: Bet = { uid, amount };
+    pay(uid, -amount);
     addBetCrash(crash, side ?? 'A', bet);
     return true;
   } else {
     if (duel.phase !== 'betting' || !side) return false;
+    pay(uid, -amount);
     addBetDuel(duel, side, { uid, amount, side });
     return true;
   }
