@@ -18,6 +18,7 @@ const [side, setSide] = useState<'A'|'B'>('A');
 useEffect(() => {
 const socket = createWS((m:any) => {
 if (m.t === 'hello') { uid.current = m.uid; setWallet(m.wallet.balance); setSnap(m.snapshot); }
+else if (m.t === 'wallet') { setWallet(m.wallet.balance); }
 else if (m.t === 'snapshot') { setSnap(m.snapshot); }
 });
 setWS(socket);

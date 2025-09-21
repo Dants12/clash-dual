@@ -56,6 +56,7 @@ export type ClientMsg =
 
 export type ServerMsg =
   | { t: 'hello'; uid: string; wallet: Wallet; snapshot: Snapshot }
+  | { t: 'wallet'; wallet: Wallet }
   | { t: 'snapshot'; snapshot: Snapshot }
   | { t: 'event'; kind: string; payload?: any }
   | { t: 'error'; message: string };
