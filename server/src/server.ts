@@ -156,6 +156,12 @@ wss.on('connection', (ws) => {
           if (msg.what === 'speed') g.speed += msg.value;
           else g.defense += msg.value;
         }
+      } else if (msg.t === 'topup') {
+        if (!uid) return;
+        const amount = Math.max(1, Math.floor(Number(msg.amount ?? 0)));
+        if (amount > 0) {
+          pay(uid, amount);
+        }
       }
     } catch (e) {
       ws.send(JSON.stringify({ t: 'error', message: (e as Error).message }));

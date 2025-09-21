@@ -23,6 +23,7 @@ const currencyFormatter = new Intl.NumberFormat(undefined, {
 const formatCurrency = (value: number) => currencyFormatter.format(Number.isFinite(value) ? value : 0);
 const formatSeconds = (ms: number) => `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 const formatMultiplier = (value: number) => `${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
+const formatMultiplierDelta = (value: number) => `${value >= 0 ? '+' : ''}${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
 const shortId = (value?: string) => (value ? value.slice(0, 8).toUpperCase() : '—');
 const formatMode = (mode: GameMode) => (mode === 'crash_dual' ? 'Crash Dual' : 'A/B Duel');
 const eventId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -35,6 +36,9 @@ const phaseToneMap: Record<string, BadgeTone> = {
   intermission: 'muted'
 };
 
+const QUICK_TOPUPS = [5, 10, 25, 50, 100, 250];
+const BET_PRESETS = [5, 10, 25, 50, 100, 250, 500];
+
 export default function App() {
   const [ws, setWS] = useState<WebSocket | null>(null);
   const uid = useRef<string>('');
@@ -44,6 +48,8 @@ export default function App() {
   const [side, setSide] = useState<Side>('A');
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [microStep, setMicroStep] = useState(1);
+  const [targetInputs, setTargetInputs] = useState<Record<Side, string>>({ A: '', B: '' });
+  const [targetRoundId, setTargetRoundId] = useState<string | null>(null);
 
   const pushEvent = useCallback((text: string) => {
     setEvents((prev) => [{ id: eventId(), text, ts: Date.now() }, ...prev].slice(0, 30));
@@ -138,6 +144,30 @@ export default function App() {
   const crashTimeLeft = crashRound ? Math.max(0, crashRound.endsAt - now) : 0;
   const duelTimeLeft = duelRound ? Math.max(0, duelRound.endsAt - now) : 0;
 
+  useEffect(() => {
+    if (!crashRound) {
+      if (mode !== 'crash_dual' && targetRoundId !== null) {
+        setTargetRoundId(null);
+      }
+      return;
+    }
+
+    if (targetRoundId === crashRound.id) {
+      return;
+    }
+
+    setTargetInputs({ A: crashRound.targetA.toFixed(2), B: crashRound.targetB.toFixed(2) });
+    setTargetRoundId(crashRound.id);
+  }, [crashRound, mode, targetRoundId]);
+
+  const targetPlans = useMemo<Record<Side, number | null>>(() => {
+    const parse = (value: string) => {
+      const next = Number.parseFloat(value);
+      return Number.isFinite(next) ? next : null;
+    };
+    return { A: parse(targetInputs.A), B: parse(targetInputs.B) };
+  }, [targetInputs.A, targetInputs.B]);
+
   const crashTotals = useMemo(() => {
     if (!crashRound) {
       return { totalA: 0, totalB: 0, countA: 0, countB: 0 };
@@ -172,6 +202,35 @@ export default function App() {
   const phaseTone = activePhase ? phaseToneMap[activePhase] ?? 'muted' : 'muted';
   const modeLabel = formatMode(mode);
 
+  const riskProfile = useMemo(
+    () => {
+      if (!snap) {
+        return { tone: 'muted' as BadgeTone, label: 'Unknown', hint: 'Awaiting data' };
+      }
+
+      if (wallet <= 0) {
+        return { tone: 'danger' as BadgeTone, label: 'Critical', hint: 'Balance depleted' };
+      }
+
+      const rtp = Number.isFinite(snap.rtpAvg) ? snap.rtpAvg : 0;
+
+      if (wallet < 150) {
+        return { tone: 'warning' as BadgeTone, label: 'High risk', hint: 'Low balance reserves' };
+      }
+
+      if (rtp < 96) {
+        return { tone: 'warning' as BadgeTone, label: 'Volatile', hint: 'RTP trending low' };
+      }
+
+      if (rtp > 103) {
+        return { tone: 'success' as BadgeTone, label: 'Advantage', hint: 'Payouts above expectation' };
+      }
+
+      return { tone: 'secondary' as BadgeTone, label: 'Balanced', hint: 'Within comfort zone' };
+    },
+    [snap, wallet]
+  );
+
   const sanitizedAmount = Number.isFinite(amount) ? amount : 0;
   const canPlaceBet =
     isLive &&
@@ -180,6 +239,62 @@ export default function App() {
     ((mode === 'crash_dual' && crashRound?.phase === 'betting') || (mode === 'duel_ab' && duelRound?.phase === 'betting'));
   const canCashout = isLive && mode === 'crash_dual' && crashRound?.phase === 'running';
   const canAdjustMicro = isLive && mode === 'duel_ab';
+  const sliderMax = useMemo(() => Math.max(100, wallet, sanitizedAmount), [sanitizedAmount, wallet]);
+  const sliderStep = sliderMax > 500 ? 25 : sliderMax > 200 ? 10 : 5;
+  const sliderDisabled = wallet <= 0 && sanitizedAmount <= 0;
+  const canEditTargets = mode === 'crash_dual' && !!crashRound;
+
+  const adjustAmount = useCallback(
+    (delta: number) => {
+      setAmount((prev) => {
+        const base = Number.isFinite(prev) ? prev : 0;
+        const next = base + delta;
+        const rounded = Math.max(0, Math.round(next));
+        if (wallet > 0) {
+          return Math.min(rounded, wallet);
+        }
+        return rounded;
+      });
+    },
+    [wallet]
+  );
+
+  const toggleSide = useCallback(() => {
+    setSide((prev) => (prev === 'A' ? 'B' : 'A'));
+  }, []);
+
+  const requestTopUp = useCallback(
+    (value: number) => {
+      if (value <= 0) return;
+      if (!isLive) {
+        pushEvent('Top-up unavailable while offline');
+        return;
+      }
+      const amountToSend = Math.max(1, Math.floor(value));
+      send({ t: 'topup', amount: amountToSend });
+      pushEvent(`Top-up requested · ${formatCurrency(amountToSend)}`);
+    },
+    [isLive, pushEvent, send]
+  );
+
+  const resetTargetsToRound = useCallback(() => {
+    if (!crashRound) {
+      setTargetInputs({ A: '', B: '' });
+      setTargetRoundId(null);
+      return;
+    }
+    setTargetInputs({ A: crashRound.targetA.toFixed(2), B: crashRound.targetB.toFixed(2) });
+    setTargetRoundId(crashRound.id);
+  }, [crashRound]);
+
+  const targetOffsets = useMemo(
+    () => ({
+      A: crashRound && targetPlans.A != null ? targetPlans.A - crashRound.targetA : null,
+      B: crashRound && targetPlans.B != null ? targetPlans.B - crashRound.targetB : null
+    }),
+    [crashRound, targetPlans]
+  );
+  const activeTargetPlan = targetPlans[side];
 
   const placeBet = useCallback(() => {
     const value = Number.isFinite(amount) ? amount : 0;
@@ -187,8 +302,10 @@ export default function App() {
     if (!isLive || !phaseOk || value <= 0 || value > wallet) return;
     const payload = { t: 'bet', amount: Math.max(1, Math.floor(value)), side };
     send(payload);
-    pushEvent(`Bet placed · ${formatCurrency(payload.amount)} on side ${side}`);
-  }, [amount, crashRound?.phase, duelRound?.phase, isLive, mode, pushEvent, send, side, wallet]);
+    const plannedTarget = targetPlans[side];
+    const planSuffix = mode === 'crash_dual' && plannedTarget != null ? ` (target ${formatMultiplier(plannedTarget)})` : '';
+    pushEvent(`Bet placed · ${formatCurrency(payload.amount)} on side ${side}${planSuffix}`);
+  }, [amount, crashRound?.phase, duelRound?.phase, isLive, mode, pushEvent, send, side, targetPlans, wallet]);
 
   const cashout = useCallback(() => {
     if (!isLive || mode !== 'crash_dual' || crashRound?.phase !== 'running') return;
@@ -283,10 +400,117 @@ export default function App() {
         <div className="layout">
           <div className="column column-left">
             <Card title="Wallet &amp; Mode" subtitle="Session overview">
-              <MetricRow label="UID" value={uid.current || '—'} />
-              <MetricRow label="Balance" value={formatCurrency(wallet)} />
-              <MetricRow label="Active mode" value={modeLabel} hint={`Phase ${activePhase ?? '—'}`} />
-              <MetricRow label="Connection" value={connectionLabel} />
+              <div className="wallet-balance">
+                <span className="wallet-balance__label">Balance</span>
+                <div className="wallet-balance__value">{formatCurrency(wallet)}</div>
+                <div className="wallet-balance__tags">
+                  <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
+                  <Badge tone={riskProfile.tone}>Risk · {riskProfile.label}</Badge>
+                </div>
+              </div>
+
+              <div className="wallet-topups">
+                {QUICK_TOPUPS.map((value) => (
+                  <button
+                    key={value}
+                    className="button button--secondary button--compact"
+                    type="button"
+                    onClick={() => requestTopUp(value)}
+                    disabled={!isLive}
+                  >
+                    +{formatCurrency(value)}
+                  </button>
+                ))}
+              </div>
+              <span className="wallet-topups__hint text-muted">Quick top-ups add funds instantly while connected.</span>
+
+              <div className="wallet-targets">
+                <div className="wallet-targets__header">
+                  <span>Target multipliers</span>
+                  <button
+                    className="button button--muted button--compact"
+                    type="button"
+                    onClick={resetTargetsToRound}
+                    disabled={!crashRound}
+                  >
+                    Reset to round
+                  </button>
+                </div>
+                <div className="wallet-targets__inputs">
+                  <div className="wallet-targets__input">
+                    <label htmlFor="target-a">Side A</label>
+                    <input
+                      id="target-a"
+                      type="number"
+                      inputMode="decimal"
+                      min={1}
+                      step={0.01}
+                      value={targetInputs.A}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        setTargetInputs((prev) => ({ ...prev, A: raw }));
+                      }}
+                      onBlur={(event) => {
+                        const parsed = Number.parseFloat(event.target.value);
+                        setTargetInputs((prev) => ({
+                          ...prev,
+                          A: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : ''
+                        }));
+                      }}
+                      disabled={!canEditTargets}
+                    />
+                  </div>
+                  <div className="wallet-targets__input">
+                    <label htmlFor="target-b">Side B</label>
+                    <input
+                      id="target-b"
+                      type="number"
+                      inputMode="decimal"
+                      min={1}
+                      step={0.01}
+                      value={targetInputs.B}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        setTargetInputs((prev) => ({ ...prev, B: raw }));
+                      }}
+                      onBlur={(event) => {
+                        const parsed = Number.parseFloat(event.target.value);
+                        setTargetInputs((prev) => ({
+                          ...prev,
+                          B: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : ''
+                        }));
+                      }}
+                      disabled={!canEditTargets}
+                    />
+                  </div>
+                </div>
+                <div className="wallet-targets__foot">
+                  {crashRound ? (
+                    <>
+                      <span className="wallet-targets__round">
+                        Round · A {formatMultiplier(crashRound.targetA)} · B {formatMultiplier(crashRound.targetB)}
+                      </span>
+                      <span className="wallet-targets__delta">
+                        Plan offset:&nbsp;
+                        <strong>A {targetOffsets.A != null ? formatMultiplierDelta(targetOffsets.A) : '—'}</strong>
+                        <span className="wallet-targets__divider">·</span>
+                        <strong>B {targetOffsets.B != null ? formatMultiplierDelta(targetOffsets.B) : '—'}</strong>
+                      </span>
+                    </>
+                  ) : (
+                    <Badge tone="muted">Targets available in Crash Dual mode</Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="wallet-metrics">
+                <MetricRow label="UID" value={uid.current || '—'} align="start" />
+                <MetricRow label="Active mode" value={<Badge tone="primary">{modeLabel}</Badge>} hint={`Phase ${activePhase ?? '—'}`} align="start" />
+                <MetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} align="start" />
+                <MetricRow label="RTP (avg)" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} hint="House rolling average" />
+                <MetricRow label="Risk status" value={<Badge tone={riskProfile.tone}>{riskProfile.label}</Badge>} hint={riskProfile.hint} align="start" />
+                <MetricRow label="Rounds played" value={snap?.rounds ?? 0} />
+              </div>
             </Card>
 
             <Card title="Main bet" subtitle="Place wagers on the active game">
@@ -295,7 +519,7 @@ export default function App() {
                 <input
                   id="bet-amount"
                   type="number"
-                  min={1}
+                  min={0}
                   value={amount}
                   onChange={(event) => {
                     const next = Number(event.target.value);
@@ -303,24 +527,97 @@ export default function App() {
                   }}
                 />
               </div>
-              <div className="segmented segmented--spread">
+
+              <div className="bet-stepper">
                 <button
-                  className="button button--muted"
+                  className="button button--muted button--compact"
                   type="button"
-                  data-active={side === 'A'}
-                  onClick={() => setSide('A')}
+                  onClick={() => adjustAmount(-sliderStep)}
+                  disabled={sanitizedAmount <= 0}
                 >
-                  Side A
+                  −{sliderStep}
                 </button>
+                <span className="bet-stepper__value">{formatCurrency(sanitizedAmount)}</span>
                 <button
-                  className="button button--muted"
+                  className="button button--secondary button--compact"
                   type="button"
-                  data-active={side === 'B'}
-                  onClick={() => setSide('B')}
+                  onClick={() => adjustAmount(sliderStep)}
+                  disabled={wallet <= 0}
                 >
-                  Side B
+                  +{sliderStep}
                 </button>
               </div>
+
+              <div className="bet-presets">
+                {BET_PRESETS.map((value) => (
+                  <button
+                    key={value}
+                    className="button button--muted button--compact"
+                    type="button"
+                    data-active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
+                    onClick={() => setAmount(wallet > 0 ? Math.min(value, wallet) : value)}
+                  >
+                    {formatCurrency(value)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="bet-slider">
+                <label htmlFor="bet-slider">Quick adjust</label>
+                <input
+                  id="bet-slider"
+                  type="range"
+                  min={0}
+                  max={sliderMax}
+                  step={sliderStep}
+                  value={sanitizedAmount}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    if (!Number.isFinite(next)) return;
+                    const normalized = Math.max(0, Math.round(next));
+                    setAmount(wallet > 0 ? Math.min(normalized, wallet) : normalized);
+                  }}
+                  disabled={sliderDisabled}
+                />
+                <div className="bet-slider__scale">
+                  <span>0</span>
+                  <span>{formatCurrency(sliderMax)}</span>
+                </div>
+              </div>
+
+              <div className="bet-side-overview">
+                <div className="bet-side-chip" data-side={side}>
+                  <span className="bet-side-chip__label">Selected</span>
+                  <span className="bet-side-chip__value">Side {side}</span>
+                  {mode === 'crash_dual' && (
+                    <span className="bet-side-chip__plan">
+                      Target · {activeTargetPlan != null ? formatMultiplier(activeTargetPlan) : '—'}
+                    </span>
+                  )}
+                </div>
+                <div className="bet-side-actions">
+                  <button
+                    className="button button--muted button--compact"
+                    type="button"
+                    data-active={side === 'A'}
+                    onClick={() => setSide('A')}
+                  >
+                    A
+                  </button>
+                  <button
+                    className="button button--muted button--compact"
+                    type="button"
+                    data-active={side === 'B'}
+                    onClick={() => setSide('B')}
+                  >
+                    B
+                  </button>
+                  <button className="button button--secondary button--compact" type="button" onClick={toggleSide}>
+                    Swap
+                  </button>
+                </div>
+              </div>
+
               <div className="button-row">
                 <button
                   className="button button--primary"
