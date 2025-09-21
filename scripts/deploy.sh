@@ -19,7 +19,7 @@ echo "[deploy] Restart systemd..."
 sudo systemctl daemon-reload
 sudo systemctl restart clash-dual.service
 
-# (опционально) если будет фронтенд
+# === Автодеплой фронта ===
 if [ -d "$CLI_DIR" ] && [ -f "$CLI_DIR/package.json" ]; then
   echo "[deploy] Client build..."
   cd "$CLI_DIR"
@@ -27,8 +27,6 @@ if [ -d "$CLI_DIR" ] && [ -f "$CLI_DIR/package.json" ]; then
   npm run build
   sudo mkdir -p /var/www/clashdual
   sudo rsync -a --delete "$CLI_DIR/dist/" /var/www/clashdual/
-  # nginx reload только если конфиг менялся
-  # sudo nginx -t && sudo systemctl reload nginx
 fi
 
 echo "[deploy] Done."
