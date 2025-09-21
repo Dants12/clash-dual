@@ -115,7 +115,6 @@ body {
 }
 
 .layout {
-codex/redesign-layout-to-horizontal-q41pq8
   --layout-hpad: clamp(28px, 6vw, 64px);
   --layout-max: 1680px;
   --column-side: clamp(300px, 26vw, 340px);
@@ -125,7 +124,6 @@ codex/redesign-layout-to-horizontal-q41pq8
   padding-bottom: 18px;
   display: flex;
   flex-wrap: nowrap;
-main
   gap: var(--gap-lg);
   align-items: stretch;
   overflow-x: auto;
@@ -878,24 +876,20 @@ input[type='range'] {
   }
 
   .layout {
-codex/redesign-layout-to-horizontal-q41pq8
     --layout-max: 1540px;
     --layout-hpad: clamp(24px, 7vw, 48px);
     --column-side: clamp(280px, 30vw, 320px);
     --column-center: clamp(520px, 54vw, 680px);
-main
   }
 }
 
 @media (max-width: 1100px) {
   .layout {
-codex/redesign-layout-to-horizontal-q41pq8
     --layout-max: 100%;
     --layout-hpad: clamp(20px, 7vw, 36px);
     --column-side: clamp(250px, 46vw, 300px);
     --column-center: clamp(420px, 72vw, 560px);
     gap: var(--gap-md);
-  main
   }
 
   .app-header {
