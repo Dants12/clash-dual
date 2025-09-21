@@ -43,6 +43,7 @@ return (
 
 
 <Panel title="Wallet & Mode">
+<Meter label="UID" value={uid.current || '-'} />
 <Meter label="Balance" value={`$${wallet.toFixed(2)}`} />
 <div className="space" />
 <div className="row">
