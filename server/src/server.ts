@@ -36,9 +36,17 @@ function broadcast(msg: ServerMsg) {
   for (const ws of sockets.values()) try { ws.send(s); } catch {}
 }
 
+function sendTo(uid: string, msg: ServerMsg) {
+  const ws = sockets.get(uid);
+  if (!ws) return;
+  try { ws.send(JSON.stringify(msg)); } catch {}
+}
+
 function pay(uid: string, delta: number) {
   const cur = wallets.get(uid) ?? 0;
-  wallets.set(uid, cur + delta);
+  const balance = cur + delta;
+  wallets.set(uid, balance);
+  sendTo(uid, { t: 'wallet', wallet: { balance } });
 }
 
 function tryCashoutCrash(uid: string) {
