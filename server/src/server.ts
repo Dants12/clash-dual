@@ -22,12 +22,13 @@ function snapshot(): Snapshot {
   return { mode, crash, duel, bankroll, jackpot, rtpAvg, rounds };
 }
 
-function hello(ws: WebSocket, uid?: string) {
+function hello(ws: WebSocket, uid?: string): string {
   const id = uid ?? uuid();
   if (!wallets.has(id)) wallets.set(id, 1000);
   sockets.set(id, ws);
   const msg: ServerMsg = { t: 'hello', uid: id, wallet: { balance: wallets.get(id)! }, snapshot: snapshot() };
   ws.send(JSON.stringify(msg));
+  return id;
 }
 
 function broadcast(msg: ServerMsg) {
@@ -130,8 +131,7 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(buf.toString()) as ClientMsg;
       if (msg.t === 'auth') {
-        hello(ws, msg.uid);
-        uid = msg.uid;
+        uid = hello(ws, msg.uid);
       } else if (msg.t === 'switch_mode') {
         mode = msg.mode;
       } else if (msg.t === 'bet') {
