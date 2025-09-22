@@ -63,7 +63,6 @@ function tryCashoutCrash(uid: string) {
         const win = b.amount * b.cashoutAt;
         const rake = win * 0.02;
         pay(uid, win - rake);
-        bankroll -= (win - rake);
         done = true;
       }
     }
@@ -109,13 +108,13 @@ setInterval(() => {
           }
         }
       }
-      crash.burned = burned;
-      crash.payouts = payouts;
-      bankroll += burned - payouts;
-      jackpot += Math.max(0, burned * 0.01);
       const totalWagered =
         crash.betsA.reduce((sum, bet) => sum + bet.amount, 0) +
         crash.betsB.reduce((sum, bet) => sum + bet.amount, 0);
+      crash.burned = burned;
+      crash.payouts = payouts;
+      bankroll += totalWagered - payouts;
+      jackpot += Math.max(0, burned * 0.01);
       const roundRtp = totalWagered > 0 ? (payouts / totalWagered) * 100 : 0;
       if (totalWagered > 0) {
         rtpSum += roundRtp;
