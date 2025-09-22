@@ -36,12 +36,15 @@ function hello(ws: WebSocket, uid?: string): string {
 
 function broadcast(msg: ServerMsg) {
   const s = JSON.stringify(msg);
-  for (const ws of sockets.values()) try { ws.send(s); } catch {}
+  for (const ws of sockets.values()) {
+    if (ws.readyState !== WebSocket.OPEN) continue;
+    try { ws.send(s); } catch {}
+  }
 }
 
 function sendTo(uid: string, msg: ServerMsg) {
   const ws = sockets.get(uid);
-  if (!ws) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
   try { ws.send(JSON.stringify(msg)); } catch {}
 }
 
@@ -89,7 +92,7 @@ function placeBet(uid: string, amount: number, side?: 'A'|'B') {
 }
 
 // Game loop
-setInterval(() => {
+const loop = setInterval(() => {
   let nextCrash: CrashRound | null = null;
   if (mode === 'crash_dual') {
     transitionCrash(crash);
@@ -154,6 +157,16 @@ console.log(`[WS] running on :${PORT}`);
 
 wss.on('connection', (ws) => {
   let uid: string | undefined;
+  const cleanup = () => {
+    if (!uid) return;
+    const current = sockets.get(uid);
+    if (current === ws) sockets.delete(uid);
+    uid = undefined;
+  };
+
+  ws.on('close', cleanup);
+  ws.on('error', cleanup);
+
   ws.on('message', (buf) => {
     try {
       const msg = JSON.parse(buf.toString()) as ClientMsg;
@@ -185,3 +198,21 @@ wss.on('connection', (ws) => {
     }
   });
 });
+
+export function getSocketCount(): number {
+  return sockets.size;
+}
+
+export async function shutdown() {
+  clearInterval(loop);
+  for (const [id, ws] of sockets) {
+    sockets.delete(id);
+    try { ws.terminate(); } catch {}
+  }
+  await new Promise<void>((resolve, reject) => {
+    wss.close((err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
