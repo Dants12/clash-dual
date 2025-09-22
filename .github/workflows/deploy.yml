@@ -4,13 +4,15 @@ on:
   push:
     branches: [ "main" ]
 
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Add server to known_hosts
         run: |
@@ -32,3 +34,4 @@ jobs:
             echo "[GH-Actions] Start deploy"
             /srv/clash-dual/scripts/deploy.sh
             echo "[GH-Actions] Deploy finished"
+
