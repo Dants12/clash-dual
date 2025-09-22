@@ -35,19 +35,7 @@ export function createWS(onMsg: (m:any)=>void) {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = location.host;
   const ws = new WebSocket(`${protocol}//${host}/ws`);
-  const storedUid = getStoredUid();
-  ws.onopen = () => {
-    const payload: { t: 'auth'; uid?: string } = { t: 'auth' };
-    if (storedUid) payload.uid = storedUid;
-    ws.send(JSON.stringify(payload));
-  };
-  ws.onmessage = (ev) => {
-    const message = JSON.parse(ev.data);
-    if (message?.t === 'hello' && typeof message.uid === 'string') {
-      persistUid(message.uid);
-    }
-    onMsg(message);
-  };
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'auth' }));
+  ws.onmessage = (ev) => onMsg(JSON.parse(ev.data));
   return ws;
 }
-
