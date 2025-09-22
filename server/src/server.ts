@@ -168,7 +168,26 @@ const loop = setInterval(() => {
 }, 100);
 
 // WS server
+let fatalErrorHandled = false;
 const wss = new WebSocketServer({ port: PORT });
+wss.on('error', (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[WS] WebSocket server error on :${PORT}: ${message}`, error);
+  if (fatalErrorHandled) return;
+  fatalErrorHandled = true;
+  if (process.exitCode === undefined || process.exitCode === 0) {
+    process.exitCode = 1;
+  }
+  void shutdown().catch((shutdownError) => {
+    const shutdownMessage = shutdownError instanceof Error ? shutdownError.message : String(shutdownError);
+    console.error(`[WS] error while shutting down after failure: ${shutdownMessage}`, shutdownError);
+  });
+  setImmediate(() => {
+    try {
+      process.exit(1);
+    } catch {}
+  });
+});
 console.log(`[WS] running on :${PORT}`);
 
 wss.on('connection', (ws) => {
