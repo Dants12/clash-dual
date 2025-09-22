@@ -291,13 +291,47 @@ export default function CrashDualCanvas({ mA, mB, targetA, targetB, phase }: Cra
       fontSize = Math.max(12, Math.min(18, displayWidth / 45));
     };
 
-    const container = canvas.parentElement ?? canvas;
+    const container = (canvas.parentElement as HTMLElement | null) ?? canvas;
+
+    const getContentBoxSize = (entry?: ResizeObserverEntry) => {
+      const devicePixelRatio = window.devicePixelRatio || 1;
+
+      if (entry) {
+        const contentBoxSize = Array.isArray(entry.contentBoxSize)
+          ? entry.contentBoxSize[0]
+          : entry.contentBoxSize;
+        if (contentBoxSize && typeof contentBoxSize.inlineSize === 'number' && typeof contentBoxSize.blockSize === 'number') {
+          return { width: contentBoxSize.inlineSize, height: contentBoxSize.blockSize };
+        }
+        const { width: entryWidth, height: entryHeight } = entry.contentRect;
+        if (entryWidth && entryHeight) {
+          return { width: entryWidth, height: entryHeight };
+        }
+      }
+
+      if (container instanceof HTMLElement) {
+        const style = window.getComputedStyle(container);
+        const paddingX =
+          (parseFloat(style.paddingLeft || '0') || 0) + (parseFloat(style.paddingRight || '0') || 0);
+        const paddingY =
+          (parseFloat(style.paddingTop || '0') || 0) + (parseFloat(style.paddingBottom || '0') || 0);
+        const width = container.clientWidth - paddingX;
+        const height = container.clientHeight - paddingY;
+        return {
+          width: width > 0 ? width : canvas.clientWidth || canvas.width / devicePixelRatio,
+          height: height > 0 ? height : canvas.clientHeight || canvas.height / devicePixelRatio,
+        };
+      }
+
+      return {
+        width: canvas.clientWidth || canvas.width / devicePixelRatio,
+        height: canvas.clientHeight || canvas.height / devicePixelRatio,
+      };
+    };
 
     const handleResize = () => {
-      const rect = container.getBoundingClientRect();
-      const width = rect.width || canvas.clientWidth || canvas.width / (window.devicePixelRatio || 1);
-      const height = rect.height || canvas.clientHeight || canvas.height / (window.devicePixelRatio || 1);
-      if (width && height) {
+      const { width, height } = getContentBoxSize();
+      if (width > 0 && height > 0) {
         applyScale(width, height);
       }
     };
@@ -307,11 +341,9 @@ export default function CrashDualCanvas({ mA, mB, targetA, targetB, phase }: Cra
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           if (entry.target === container) {
-            const { width, height } = entry.contentRect;
-            const nextWidth = width || canvas.clientWidth || canvas.width / (window.devicePixelRatio || 1);
-            const nextHeight = height || canvas.clientHeight || canvas.height / (window.devicePixelRatio || 1);
-            if (nextWidth && nextHeight) {
-              applyScale(nextWidth, nextHeight);
+            const { width, height } = getContentBoxSize(entry);
+            if (width > 0 && height > 0) {
+              applyScale(width, height);
             }
           }
         }
