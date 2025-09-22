@@ -54,7 +54,14 @@ function resolveWSUrl(): string {
 
 export function createWS(onMsg: (m:any)=>void) {
   const ws = new WebSocket(resolveWSUrl());
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'auth' }));
+  ws.onopen = () => {
+    const storedUid = getStoredUid();
+    const payload: Record<string, unknown> = { t: 'auth' };
+    if (storedUid) {
+      payload.uid = storedUid;
+    }
+    ws.send(JSON.stringify(payload));
+  };
   ws.onmessage = (ev) => onMsg(JSON.parse(ev.data));
   return ws;
 }

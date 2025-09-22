@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CrashDualCanvas from './games/CrashDualCanvas';
 import DuelABPanel from './games/DuelABPanel';
-import { createWS } from './ws';
+import { createWS, persistUid } from './ws';
 import type { GameMode, Side, Snapshot } from './types';
 import { Card } from './ui/Card';
 import { Badge, type BadgeTone } from './ui/Badge';
@@ -94,6 +94,9 @@ export default function App() {
     const socket = createWS((message: any) => {
       if (message.t === 'hello') {
         uid.current = typeof message.uid === 'string' ? message.uid : '';
+        if (uid.current) {
+          persistUid(uid.current);
+        }
         setWallet(Number(message.wallet?.balance ?? 0));
         handleSnapshot(message.snapshot as Snapshot);
         pushEvent(`Connected as ${uid.current || 'guest'}`);
