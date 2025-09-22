@@ -31,10 +31,29 @@ export function persistUid(value: string) {
   }
 }
 
+function resolveWSUrl(): string {
+  if (typeof window === 'undefined') {
+    return 'ws://localhost:8081/ws';
+  }
+
+  const envUrl = import.meta.env?.VITE_WS_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+
+  const { hostname, host, protocol } = window.location;
+
+  if (import.meta.env?.DEV) {
+    return `ws://${hostname || 'localhost'}:8081/ws`;
+  }
+
+  const scheme = protocol === 'https:' ? 'wss:' : 'ws:';
+  const effectiveHost = host || hostname || 'localhost';
+  return `${scheme}//${effectiveHost}/ws`;
+}
+
 export function createWS(onMsg: (m:any)=>void) {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = location.host;
-  const ws = new WebSocket(`${protocol}//${host}/ws`);
+  const ws = new WebSocket(resolveWSUrl());
   ws.onopen = () => ws.send(JSON.stringify({ t: 'auth' }));
   ws.onmessage = (ev) => onMsg(JSON.parse(ev.data));
   return ws;
