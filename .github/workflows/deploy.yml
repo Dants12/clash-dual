@@ -25,11 +25,14 @@ jobs:
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           port: ${{ secrets.SSH_PORT || '22' }}
           key: ${{ secrets.SSH_KEY }}
+          envs: SUDO_PASSWORD
           script: |
             echo "[GH-Actions] Start deploy"
             /srv/clash-dual/scripts/deploy.sh
