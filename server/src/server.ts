@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { GameMode, ClientMsg, ServerMsg, Snapshot, Bet, CrashRound } from './types.js';
 import { newCrashRound, tickCrash, transitionCrash, addBetCrash, canBet as canBetCrash } from './game_crash_dual.js';
 import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
+import { calculateDuelSettlement } from './duel_settlement.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8081;
 
@@ -127,17 +128,11 @@ setInterval(() => {
   } else {
     transitionDuel(duel);
     if (duel.phase === 'intermission') {
-      const burned = duel.bets.reduce((s,b)=> s + b.amount, 0);
-      const winners = duel.bets.filter(b => b.side === duel.winner);
-      const winPool = burned * 0.98;
-      const tot = winners.reduce((s,b)=> s + b.amount, 0) || 1;
-      let roundPayouts = 0;
-      for (const b of winners) {
-        const payout = (b.amount / tot) * winPool;
-        roundPayouts += payout;
-        pay(b.uid, payout);
-        bankroll -= payout;
+      const { burned, roundPayouts, payouts } = calculateDuelSettlement(duel.bets, duel.winner);
+      for (const { uid, amount } of payouts) {
+        pay(uid, amount);
       }
+      bankroll += burned - roundPayouts;
       jackpot += burned * 0.01;
       const roundRtp = burned > 0 ? (roundPayouts / burned) * 100 : 0;
       if (burned > 0) {
