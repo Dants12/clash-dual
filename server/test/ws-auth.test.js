@@ -63,8 +63,9 @@ test('allows betting and cashing out on the same authenticated socket', async (t
     env: { ...process.env, PORT: String(PORT) },
     stdio: ['ignore', 'pipe', 'pipe']
   });
-  t.after(() => {
+  t.after(async () => {
     server.kill('SIGTERM');
+    await once(server, 'exit');
   });
 
   await once(server.stdout, 'data');

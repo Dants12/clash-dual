@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import WebSocket from 'ws';
 
-const PORT = 19082;
+const PORT = 19083;
 
 function createMessageQueue(ws) {
   const queue = [];
@@ -53,8 +53,9 @@ test('rejects duel bets without a side without charging the wallet', async (t) =
     env: { ...process.env, PORT: String(PORT) },
     stdio: ['ignore', 'pipe', 'pipe']
   });
-  t.after(() => {
+  t.after(async () => {
     server.kill('SIGTERM');
+    await once(server, 'exit');
   });
 
   await once(server.stdout, 'data');

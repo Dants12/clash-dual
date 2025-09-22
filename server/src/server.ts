@@ -5,7 +5,23 @@ import { newCrashRound, tickCrash, transitionCrash, addBetCrash, canBet as canBe
 import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 import { calculateDuelSettlement } from './duel_settlement.js';
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 8081;
+const DEFAULT_PORT = 8081;
+
+function resolvePort(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+
+  console.warn(`[WS] Invalid PORT environment value "${raw}", falling back to :${fallback}`);
+  return fallback;
+}
+
+const PORT = resolvePort(process.env.PORT, DEFAULT_PORT);
 
 let mode: GameMode = 'crash_dual';
 let bankroll = 100000;
