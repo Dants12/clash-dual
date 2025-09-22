@@ -8,18 +8,117 @@ type CrashDualCanvasProps = {
   phase: string;
 };
 
+type PathCommand =
+  | { type: 'moveTo'; x: number; y: number }
+  | { type: 'lineTo'; x: number; y: number }
+  | { type: 'quadraticCurveTo'; cpx: number; cpy: number; x: number; y: number }
+  | { type: 'closePath' };
+
+type PlaneShape = Path2D | PathCommand[];
+
 type PlaneGraphic = {
-  fuselage: Path2D;
-  wings: Path2D;
-  tail: Path2D;
-  cockpit: Path2D;
-  fins?: Path2D;
+  fuselage: PlaneShape;
+  wings: PlaneShape;
+  tail: PlaneShape;
+  cockpit: PlaneShape;
+  fins?: PlaneShape;
   bounds: {
     nose: number;
     tail: number;
     top: number;
     bottom: number;
   };
+};
+
+type PlaneCommandMap = {
+  fuselage: PathCommand[];
+  wings: PathCommand[];
+  tail: PathCommand[];
+  cockpit: PathCommand[];
+  fins?: PathCommand[];
+};
+
+const planeACommands: PlaneCommandMap = {
+  wings: [
+    { type: 'moveTo', x: -6, y: 0 },
+    { type: 'lineTo', x: -28, y: -16 },
+    { type: 'lineTo', x: -14, y: -4 },
+    { type: 'lineTo', x: -34, y: 0 },
+    { type: 'lineTo', x: -14, y: 4 },
+    { type: 'lineTo', x: -28, y: 16 },
+    { type: 'closePath' },
+  ],
+  tail: [
+    { type: 'moveTo', x: -18, y: -3 },
+    { type: 'lineTo', x: -26, y: -16 },
+    { type: 'lineTo', x: -20, y: -3 },
+    { type: 'lineTo', x: -26, y: 16 },
+    { type: 'lineTo', x: -18, y: 3 },
+    { type: 'closePath' },
+  ],
+  fuselage: [
+    { type: 'moveTo', x: 34, y: 0 },
+    { type: 'quadraticCurveTo', cpx: 20, cpy: -7, x: 10, y: -7 },
+    { type: 'lineTo', x: -14, y: -5 },
+    { type: 'quadraticCurveTo', cpx: -28, cpy: -2, x: -30, y: 0 },
+    { type: 'quadraticCurveTo', cpx: -28, cpy: 2, x: -14, y: 5 },
+    { type: 'lineTo', x: 10, y: 7 },
+    { type: 'quadraticCurveTo', cpx: 20, cpy: 7, x: 34, y: 0 },
+    { type: 'closePath' },
+  ],
+  cockpit: [
+    { type: 'moveTo', x: 11, y: -3.5 },
+    { type: 'quadraticCurveTo', cpx: 20, cpy: 0, x: 11, y: 3.5 },
+    { type: 'lineTo', x: 6, y: 3.5 },
+    { type: 'quadraticCurveTo', cpx: 13, cpy: 0, x: 6, y: -3.5 },
+    { type: 'closePath' },
+  ],
+  fins: [
+    { type: 'moveTo', x: -2, y: -3 },
+    { type: 'lineTo', x: 10, y: -10 },
+    { type: 'lineTo', x: 6, y: -1 },
+    { type: 'lineTo', x: 10, y: 10 },
+    { type: 'lineTo', x: -2, y: 3 },
+    { type: 'closePath' },
+  ],
+};
+
+const planeBCommands: PlaneCommandMap = {
+  wings: [
+    { type: 'moveTo', x: -2, y: 0 },
+    { type: 'lineTo', x: -20, y: -14 },
+    { type: 'lineTo', x: -8, y: -3 },
+    { type: 'lineTo', x: -26, y: 0 },
+    { type: 'lineTo', x: -8, y: 3 },
+    { type: 'lineTo', x: -20, y: 14 },
+    { type: 'closePath' },
+  ],
+  tail: [
+    { type: 'moveTo', x: -12, y: -4 },
+    { type: 'lineTo', x: -4, y: -18 },
+    { type: 'lineTo', x: -2, y: -4 },
+    { type: 'lineTo', x: -2, y: 4 },
+    { type: 'lineTo', x: -4, y: 18 },
+    { type: 'lineTo', x: -12, y: 4 },
+    { type: 'closePath' },
+  ],
+  fuselage: [
+    { type: 'moveTo', x: 30, y: 0 },
+    { type: 'quadraticCurveTo', cpx: 18, cpy: -9, x: 8, y: -9 },
+    { type: 'lineTo', x: -12, y: -7 },
+    { type: 'quadraticCurveTo', cpx: -26, cpy: -4, x: -28, y: 0 },
+    { type: 'quadraticCurveTo', cpx: -26, cpy: 4, x: -12, y: 7 },
+    { type: 'lineTo', x: 8, y: 9 },
+    { type: 'quadraticCurveTo', cpx: 18, cpy: 9, x: 30, y: 0 },
+    { type: 'closePath' },
+  ],
+  cockpit: [
+    { type: 'moveTo', x: 8, y: -3 },
+    { type: 'quadraticCurveTo', cpx: 14, cpy: 0, x: 8, y: 3 },
+    { type: 'lineTo', x: 3.5, y: 3 },
+    { type: 'quadraticCurveTo', cpx: 10, cpy: 0, x: 3.5, y: -3 },
+    { type: 'closePath' },
+  ],
 };
 
 type PlanePalette = {
@@ -36,7 +135,9 @@ type PlanePalette = {
 export default function CrashDualCanvas({ mA, mB, targetA, targetB, phase }: CrashDualCanvasProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const metricsRef = useRef({ mA, mB, targetA, targetB, phase });
-  const planeGraphicsRef = useRef<{ planeA: PlaneGraphic; planeB: PlaneGraphic } | null>(null);
+  const planeGraphicsRef = useRef<
+    { planeA: PlaneGraphic; planeB: PlaneGraphic; usesPath2D: boolean } | null
+  >(null);
 
   useEffect(() => {
     metricsRef.current = { mA, mB, targetA, targetB, phase };
@@ -53,112 +154,85 @@ export default function CrashDualCanvas({ mA, mB, targetA, targetB, phase }: Cra
       return;
     }
 
-    const createPlaneA = (): PlaneGraphic => {
-      const wings = new Path2D();
-      wings.moveTo(-6, 0);
-      wings.lineTo(-28, -16);
-      wings.lineTo(-14, -4);
-      wings.lineTo(-34, 0);
-      wings.lineTo(-14, 4);
-      wings.lineTo(-28, 16);
-      wings.closePath();
-
-      const tail = new Path2D();
-      tail.moveTo(-18, -3);
-      tail.lineTo(-26, -16);
-      tail.lineTo(-20, -3);
-      tail.lineTo(-26, 16);
-      tail.lineTo(-18, 3);
-      tail.closePath();
-
-      const fuselage = new Path2D();
-      fuselage.moveTo(34, 0);
-      fuselage.quadraticCurveTo(20, -7, 10, -7);
-      fuselage.lineTo(-14, -5);
-      fuselage.quadraticCurveTo(-28, -2, -30, 0);
-      fuselage.quadraticCurveTo(-28, 2, -14, 5);
-      fuselage.lineTo(10, 7);
-      fuselage.quadraticCurveTo(20, 7, 34, 0);
-      fuselage.closePath();
-
-      const cockpit = new Path2D();
-      cockpit.moveTo(11, -3.5);
-      cockpit.quadraticCurveTo(20, 0, 11, 3.5);
-      cockpit.lineTo(6, 3.5);
-      cockpit.quadraticCurveTo(13, 0, 6, -3.5);
-      cockpit.closePath();
-
-      const fins = new Path2D();
-      fins.moveTo(-2, -3);
-      fins.lineTo(10, -10);
-      fins.lineTo(6, -1);
-      fins.lineTo(10, 10);
-      fins.lineTo(-2, 3);
-      fins.closePath();
-
-      return {
-        fuselage,
-        wings,
-        tail,
-        cockpit,
-        fins,
-        bounds: { nose: 34, tail: 30, top: 20, bottom: 20 },
-      };
+    const applyCommandsToTarget = (target: CanvasRenderingContext2D | Path2D, commands: PathCommand[]) => {
+      for (const command of commands) {
+        switch (command.type) {
+          case 'moveTo':
+            target.moveTo(command.x, command.y);
+            break;
+          case 'lineTo':
+            target.lineTo(command.x, command.y);
+            break;
+          case 'quadraticCurveTo':
+            target.quadraticCurveTo(command.cpx, command.cpy, command.x, command.y);
+            break;
+          case 'closePath':
+            target.closePath();
+            break;
+        }
+      }
     };
 
-    const createPlaneB = (): PlaneGraphic => {
-      const wings = new Path2D();
-      wings.moveTo(-2, 0);
-      wings.lineTo(-20, -14);
-      wings.lineTo(-8, -3);
-      wings.lineTo(-26, 0);
-      wings.lineTo(-8, 3);
-      wings.lineTo(-20, 14);
-      wings.closePath();
-
-      const tail = new Path2D();
-      tail.moveTo(-12, -4);
-      tail.lineTo(-4, -18);
-      tail.lineTo(-2, -4);
-      tail.lineTo(-2, 4);
-      tail.lineTo(-4, 18);
-      tail.lineTo(-12, 4);
-      tail.closePath();
-
-      const fuselage = new Path2D();
-      fuselage.moveTo(30, 0);
-      fuselage.quadraticCurveTo(18, -9, 8, -9);
-      fuselage.lineTo(-12, -7);
-      fuselage.quadraticCurveTo(-26, -4, -28, 0);
-      fuselage.quadraticCurveTo(-26, 4, -12, 7);
-      fuselage.lineTo(8, 9);
-      fuselage.quadraticCurveTo(18, 9, 30, 0);
-      fuselage.closePath();
-
-      const cockpit = new Path2D();
-      cockpit.moveTo(8, -3);
-      cockpit.quadraticCurveTo(14, 0, 8, 3);
-      cockpit.lineTo(3.5, 3);
-      cockpit.quadraticCurveTo(10, 0, 3.5, -3);
-      cockpit.closePath();
-
-      return {
-        fuselage,
-        wings,
-        tail,
-        cockpit,
-        bounds: { nose: 30, tail: 28, top: 18, bottom: 22 },
-      };
+    const createShape = (commands: PathCommand[], usePath2D: boolean): PlaneShape => {
+      if (usePath2D && typeof Path2D !== 'undefined') {
+        const path = new Path2D();
+        applyCommandsToTarget(path, commands);
+        return path;
+      }
+      return commands;
     };
+
+    const createPlaneA = (usePath2D: boolean): PlaneGraphic => ({
+      fuselage: createShape(planeACommands.fuselage, usePath2D),
+      wings: createShape(planeACommands.wings, usePath2D),
+      tail: createShape(planeACommands.tail, usePath2D),
+      cockpit: createShape(planeACommands.cockpit, usePath2D),
+      fins: planeACommands.fins ? createShape(planeACommands.fins, usePath2D) : undefined,
+      bounds: { nose: 34, tail: 30, top: 20, bottom: 20 },
+    });
+
+    const createPlaneB = (usePath2D: boolean): PlaneGraphic => ({
+      fuselage: createShape(planeBCommands.fuselage, usePath2D),
+      wings: createShape(planeBCommands.wings, usePath2D),
+      tail: createShape(planeBCommands.tail, usePath2D),
+      cockpit: createShape(planeBCommands.cockpit, usePath2D),
+      bounds: { nose: 30, tail: 28, top: 18, bottom: 22 },
+    });
 
     const ensurePlaneGraphics = () => {
-      if (!planeGraphicsRef.current) {
-        if (typeof Path2D === 'undefined') {
-          return null;
-        }
-        planeGraphicsRef.current = { planeA: createPlaneA(), planeB: createPlaneB() };
+      const hasPath2DSupport = typeof Path2D !== 'undefined';
+      const cached = planeGraphicsRef.current;
+      if (!cached || cached.usesPath2D !== hasPath2DSupport) {
+        planeGraphicsRef.current = {
+          planeA: createPlaneA(hasPath2DSupport),
+          planeB: createPlaneB(hasPath2DSupport),
+          usesPath2D: hasPath2DSupport,
+        };
       }
       return planeGraphicsRef.current;
+    };
+
+    const isPath2DShape = (shape: PlaneShape): shape is Path2D =>
+      typeof Path2D !== 'undefined' && shape instanceof Path2D;
+
+    const fillShape = (shape: PlaneShape) => {
+      if (isPath2DShape(shape)) {
+        ctx.fill(shape);
+      } else {
+        ctx.beginPath();
+        applyCommandsToTarget(ctx, shape);
+        ctx.fill();
+      }
+    };
+
+    const strokeShape = (shape: PlaneShape) => {
+      if (isPath2DShape(shape)) {
+        ctx.stroke(shape);
+      } else {
+        ctx.beginPath();
+        applyCommandsToTarget(ctx, shape);
+        ctx.stroke();
+      }
     };
 
     const drawPlane = (
@@ -192,19 +266,19 @@ export default function CrashDualCanvas({ mA, mB, targetA, targetB, phase }: Cra
       wingGradient.addColorStop(0, palette.wings);
       wingGradient.addColorStop(1, palette.wings + 'AA');
       ctx.fillStyle = wingGradient;
-      ctx.fill(graphic.wings);
+      fillShape(graphic.wings);
       ctx.strokeStyle = palette.trim;
       ctx.lineWidth = 0.9;
-      ctx.stroke(graphic.wings);
+      strokeShape(graphic.wings);
 
       ctx.fillStyle = palette.tail;
-      ctx.fill(graphic.tail);
-      ctx.stroke(graphic.tail);
+      fillShape(graphic.tail);
+      strokeShape(graphic.tail);
 
       if (graphic.fins) {
         ctx.globalAlpha = 0.85;
         ctx.fillStyle = palette.tail;
-        ctx.fill(graphic.fins);
+        fillShape(graphic.fins);
         ctx.globalAlpha = 1;
       }
 
@@ -215,16 +289,16 @@ export default function CrashDualCanvas({ mA, mB, targetA, targetB, phase }: Cra
       fuselageGradient.addColorStop(0, palette.bodyLight);
       fuselageGradient.addColorStop(1, palette.bodyDark);
       ctx.fillStyle = fuselageGradient;
-      ctx.fill(graphic.fuselage);
+      fillShape(graphic.fuselage);
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
 
       ctx.strokeStyle = palette.trim;
       ctx.lineWidth = 1.2;
-      ctx.stroke(graphic.fuselage);
+      strokeShape(graphic.fuselage);
 
       ctx.fillStyle = palette.cockpit;
-      ctx.fill(graphic.cockpit);
+      fillShape(graphic.cockpit);
 
       ctx.globalAlpha = 0.45;
       ctx.beginPath();
