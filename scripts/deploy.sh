@@ -44,7 +44,8 @@ for i in {1..40}; do
     exit 1
   fi
 done
-
+GIT_SHA=$(git rev-parse --short HEAD)
+export VITE_COMMIT=$GIT_SHA
 # --- фронт (без sudo; сделай владельцем каталог один раз: sudo chown -R $USER:$USER /var/www/clashdual)
 if [ -f "$CLI_DIR/package.json" ]; then
   log "Client build..."
