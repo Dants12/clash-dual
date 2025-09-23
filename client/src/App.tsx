@@ -368,16 +368,30 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header__title">
-          <h1>Clash Demo</h1>
-          <span className="text-muted">Realtime crash &amp; duel playground</span>
+          <div className="app-header__logo" aria-hidden="true">
+            ✦
+          </div>
+          <div className="app-header__copy">
+            <span className="app-header__eyebrow">Realtime casino sandbox</span>
+            <h1>Clash Dual</h1>
+            <p className="app-header__lead">
+              Balance crash flights and duel skirmishes from one cinematic control room.
+            </p>
+          </div>
         </div>
         <div className="app-header__badges">
-          <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
-          <Badge tone="primary">Mode · {modeLabel}</Badge>
-          <Badge tone={phaseTone}>Phase · {activePhase ?? '—'}</Badge>
-          <Badge tone="muted">Rounds · {snap?.rounds ?? 0}</Badge>
+          <div className="app-header__badge-row">
+            <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
+            <Badge tone="primary">Mode · {modeLabel}</Badge>
+            <Badge tone={phaseTone}>Phase · {activePhase ?? '—'}</Badge>
+            <Badge tone="muted">Rounds · {snap?.rounds ?? 0}</Badge>
+          </div>
+          <p className="app-header__hint">
+            Monitor live telemetry, tweak multipliers, and launch your bets the moment the skies align.
+          </p>
         </div>
         <div className="app-header__controls">
+          <span className="app-header__controls-label">Game mode</span>
           <div className="segmented">
             <button
               className="button button--muted"
@@ -398,10 +412,39 @@ export default function App() {
               A/B Duel
             </button>
           </div>
+          <p className="app-header__controls-hint">Switch modes while connected to explore both arenas.</p>
         </div>
       </header>
 
       <main className="app-main">
+        <section className="app-main__intro">
+          <div className="app-main__intro-copy">
+            <h2>Command center</h2>
+            <p>Choose your side, track the pools, and react instantly to shifting phases.</p>
+          </div>
+          <div className="app-main__summary">
+            <div className="app-main__summary-item">
+              <span className="app-main__summary-label">Wallet</span>
+              <span className="app-main__summary-value">{formatCurrency(wallet)}</span>
+            </div>
+            <div className="app-main__summary-item">
+              <span className="app-main__summary-label">Game mode</span>
+              <span className="app-main__summary-value">{modeLabel}</span>
+            </div>
+            <div className="app-main__summary-item">
+              <span className="app-main__summary-label">Risk profile</span>
+              <span className="app-main__summary-value">{riskProfile.label}</span>
+            </div>
+            <div className="app-main__summary-item">
+              <span className="app-main__summary-label">Operator edge</span>
+              <span className="app-main__summary-value">{formatPercent(roundStats?.operatorEdge ?? 0)}</span>
+            </div>
+            <div className="app-main__summary-item">
+              <span className="app-main__summary-label">Rounds played</span>
+              <span className="app-main__summary-value">{snap?.rounds ?? 0}</span>
+            </div>
+          </div>
+        </section>
         <div className="layout">
           <div className="column column-left">
             <Card title="Wallet &amp; Mode" subtitle="Session overview">
@@ -814,19 +857,13 @@ export default function App() {
           </div>
         </div>
       </main>
-      <div style={{
-  position: 'fixed',
-  right: 8,
-  bottom: 8,
-  padding: '4px 8px',
-  fontSize: 12,
-  opacity: 0.7,
-  background: 'rgba(0,0,0,0.5)',
-  color: '#fff',
-  borderRadius: 6
-}}>
-  build: {commit || 'local'}
-</div>
+      <footer className="app-footer">
+        <div className="app-footer__inner">
+          <span className="app-footer__brand">Clash Dual playground</span>
+          <span className="app-footer__note">Simulation environment for crash and duel mechanics.</span>
+          <span className="app-footer__build">Build · {commit || 'local'}</span>
+        </div>
+      </footer>
     </div>
   );
 }
