@@ -68,7 +68,7 @@ export default function App() {
     }
     return initial;
   });
-  const commit = import.meta.env.VITE_COMMIT as string | undefined;
+  const commit = (import.meta.env.VITE_COMMIT as string | undefined) || 'local';
 
   const pushEvent = useCallback((text: string) => {
     setEvents((prev) => [{ id: eventId(), text, ts: Date.now() }, ...prev].slice(0, 30));
@@ -924,9 +924,31 @@ export default function App() {
         <div className="app-footer__inner">
           <span className="app-footer__brand">Clash Dual playground</span>
           <span className="app-footer__note">Simulation environment for crash and duel mechanics.</span>
-          <span className="app-footer__build">Build · {commit || 'local'}</span>
         </div>
       </footer>
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 1000,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 14px',
+          borderRadius: '999px',
+          background: 'var(--color-surface-strong)',
+          border: '1px solid var(--color-border-strong)',
+          boxShadow: '0 18px 40px rgba(6, 10, 26, 0.35)',
+          fontSize: '12px',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: 'var(--color-muted)'
+        }}
+      >
+        <span style={{ opacity: 0.72 }}>Build</span>
+        <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>{commit}</span>
+      </div>
     </div>
   );
 }
