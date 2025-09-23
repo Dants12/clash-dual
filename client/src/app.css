@@ -293,14 +293,11 @@ body::before {
   width: min(var(--layout-max), 100%);
   padding-inline: var(--layout-hpad);
   padding-bottom: 18px;
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: minmax(0, var(--column-side)) minmax(0, 1fr)
+    minmax(0, var(--column-side));
   gap: var(--gap-lg);
-  align-items: stretch;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  scroll-padding-inline: var(--layout-hpad);
-  -webkit-overflow-scrolling: touch;
+  align-items: start;
   scrollbar-width: thin;
   scrollbar-color: rgba(124, 109, 255, 0.35) rgba(16, 20, 42, 0.65);
 }
@@ -323,29 +320,20 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: var(--gap-lg);
-  flex: 0 0 auto;
-  min-width: var(--column-side);
-  scroll-snap-align: start;
+  min-width: 0;
 }
 
-.column-left,
-.column-right {
-  flex-basis: var(--column-side);
+.column-left {
+  grid-column: 1;
 }
 
 .column-center {
-  flex: 1 1 var(--column-center);
-  min-width: var(--column-center);
+  grid-column: 2;
   max-width: 760px;
 }
 
-.column-left,
 .column-right {
-  min-width: 280px;
-}
-
-.column-center {
-  min-width: 420px;
+  grid-column: 3;
 }
 
 .card {
@@ -1098,6 +1086,11 @@ input[type='range'] {
     --layout-hpad: clamp(24px, 7vw, 48px);
     --column-side: clamp(280px, 30vw, 320px);
     --column-center: clamp(520px, 54vw, 680px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .column-right {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1107,7 +1100,18 @@ input[type='range'] {
     --layout-hpad: clamp(22px, 7vw, 38px);
     --column-side: clamp(250px, 46vw, 300px);
     --column-center: clamp(420px, 72vw, 560px);
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--gap-md);
+  }
+
+  .column-left,
+  .column-center,
+  .column-right {
+    grid-column: 1;
+  }
+
+  .column-center {
+    max-width: none;
   }
 
   .app-header {
@@ -1172,16 +1176,6 @@ input[type='range'] {
 
   .app-main__summary {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  }
-
-  .column {
-    flex-basis: min(100%, 420px);
-    min-width: min(100%, 420px);
-  }
-
-  .column-center {
-    flex: 0 0 min(100%, 520px);
-    max-width: none;
   }
 
   .app-header {
