@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import React from 'react';
 
 export interface CardProps {
   title?: ReactNode;
@@ -9,26 +8,11 @@ export interface CardProps {
   className?: string;
   bodyClassName?: string;
 }
-type Props = {
-  title?: React.ReactNode;
-  subtitle?: React.ReactNode;
-  children?: React.ReactNode;
-  bodyClassName?: string;
-};
 
-export function Card({ title, subtitle, children, bodyClassName }: Props) {
-  return (
-    <section className="card">
-      {(title || subtitle) && (
-        <header className="card__header">
-          {title && <h3 className="card__title">{title}</h3>}
-          {subtitle && <p className="card__subtitle">{subtitle}</p>}
-        </header>
-      )}
-      <div className={`card__body ${bodyClassName || ''}`}>{children}</div>
-    </section>
-  );
-}
+export function Card({ title, subtitle, actions, children, className, bodyClassName }: CardProps) {
+  const hasHeader = Boolean(title || subtitle || actions);
+  const wrapperClassName = ['card', className].filter(Boolean).join(' ');
+  const bodyClass = ['card-body', bodyClassName].filter(Boolean).join(' ');
 
   return (
     <section className={wrapperClassName}>
