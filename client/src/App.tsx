@@ -814,9 +814,6 @@ export default function App() {
           </div>
         </div>
       </main>
-      <div style={{ position: 'fixed', right: 8, bottom: 8, opacity: 0.6, fontSize: 12 }}>
-        build: {commit ?? 'unknown'}
-      </div>
       <div style={{
   position: 'fixed',
   right: 8,
