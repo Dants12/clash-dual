@@ -51,12 +51,11 @@ export default function App() {
   const [microStep, setMicroStep] = useState(1);
   const [targetInputs, setTargetInputs] = useState<Record<Side, string>>({ A: '', B: '' });
   const [targetRoundId, setTargetRoundId] = useState<string | null>(null);
+  const commit = import.meta.env.VITE_COMMIT as string | undefined;
 
   const pushEvent = useCallback((text: string) => {
     setEvents((prev) => [{ id: eventId(), text, ts: Date.now() }, ...prev].slice(0, 30));
   }, []);
-const COMMIT = import.meta.env.VITE_COMMIT;
-<footer style={{opacity:.6,fontSize:12}}>build: {COMMIT}</footer>
   const handleSnapshot = useCallback(
     (incoming: Snapshot) => {
       setSnap((prev) => {
@@ -815,6 +814,9 @@ const COMMIT = import.meta.env.VITE_COMMIT;
           </div>
         </div>
       </main>
+      <div style={{ position: 'fixed', right: 8, bottom: 8, opacity: 0.6, fontSize: 12 }}>
+        build: {commit ?? 'unknown'}
+      </div>
     </div>
   );
 }
