@@ -34,6 +34,17 @@ export interface DuelRound {
   winner?: Side;
 }
 
+export interface RoundStats {
+  totalRounds: number;
+  crashRounds: number;
+  duelRounds: number;
+  totalWagered: number;
+  totalPayouts: number;
+  operatorProfit: number;
+  operatorEdge: number;
+  operatorEdgeTarget: number;
+}
+
 export interface Snapshot {
   mode: GameMode;
   crash?: CrashRound;
@@ -42,4 +53,5 @@ export interface Snapshot {
   jackpot: number;
   rtpAvg: number;
   rounds: number;
+  stats: RoundStats;
 }
