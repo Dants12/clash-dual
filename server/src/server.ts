@@ -4,6 +4,7 @@ import { GameMode, ClientMsg, ServerMsg, Snapshot, Bet, CrashRound } from './typ
 import { newCrashRound, tickCrash, transitionCrash, addBetCrash, canBet as canBetCrash } from './game_crash_dual.js';
 import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 import { calculateDuelSettlement } from './duel_settlement.js';
+import { ClientMsgSchema } from './schema.js';
 
 const DEFAULT_PORT = 8081;
 const HEARTBEAT_INTERVAL_MS = 15000;
@@ -203,6 +204,8 @@ const loop = setInterval(() => {
 
 // WS server
 let fatalErrorHandled = false;
+const INVALID_PAYLOAD_MESSAGE = JSON.stringify({ t: 'error', message: 'invalid_payload' });
+
 const wss = new WebSocketServer({ port: PORT });
 wss.on('error', (error) => {
   const message = error instanceof Error ? error.message : String(error);
@@ -224,10 +227,11 @@ wss.on('error', (error) => {
 });
 console.log(`[WS] running on :${PORT}`);
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, request) => {
   let uid: string | undefined;
   let alive = true;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const ip = request?.socket?.remoteAddress ?? 'unknown';
 
   const cleanup = () => {
     if (heartbeat !== null) {
@@ -267,9 +271,43 @@ wss.on('connection', (ws) => {
   ws.on('close', cleanup);
   ws.on('error', cleanup);
 
-  ws.on('message', (buf) => {
+  const sendInvalidPayload = () => {
+    if (ws.readyState !== WebSocket.OPEN) return;
     try {
-      const msg = JSON.parse(buf.toString()) as ClientMsg;
+      ws.send(INVALID_PAYLOAD_MESSAGE);
+    } catch {}
+  };
+
+  const rejectInvalidPayload = (reason: string) => {
+    const formatted = typeof reason === 'string' && reason.length > 0 ? reason : 'unknown reason';
+    console.warn(`[WS] invalid payload from ip=${ip} uid=${uid ?? 'unknown'}: ${formatted}`);
+    sendInvalidPayload();
+  };
+
+  ws.on('message', (buf) => {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(buf.toString());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      rejectInvalidPayload(message);
+      return;
+    }
+
+    const parsed = ClientMsgSchema.safeParse(raw);
+    if (!parsed.success) {
+      const message = parsed.error.issues
+        .map((issue) => {
+          const path = issue.path.length > 0 ? issue.path.join('.') : '<root>';
+          return `${path}: ${issue.message}`;
+        })
+        .join('; ') || parsed.error.message;
+      rejectInvalidPayload(message);
+      return;
+    }
+
+    const msg: ClientMsg = parsed.data;
+    try {
       if (msg.t === 'ping') {
         ensureHeartbeat();
         if (ws.readyState === WebSocket.OPEN) {
@@ -281,7 +319,7 @@ wss.on('connection', (ws) => {
         mode = msg.mode;
       } else if (msg.t === 'bet') {
         if (!uid) return;
-        placeBet(uid, Math.max(1, Math.floor(msg.amount)), msg.side as any);
+        placeBet(uid, Math.max(1, Math.floor(msg.amount)), msg.side);
       } else if (msg.t === 'cashout') {
         if (!uid) return;
         tryCashoutCrash(uid);
@@ -299,7 +337,11 @@ wss.on('connection', (ws) => {
         }
       }
     } catch (e) {
-      ws.send(JSON.stringify({ t: 'error', message: (e as Error).message }));
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ t: 'error', message: (e as Error).message }));
+        } catch {}
+      }
     }
   });
 });
