@@ -817,6 +817,19 @@ export default function App() {
       <div style={{ position: 'fixed', right: 8, bottom: 8, opacity: 0.6, fontSize: 12 }}>
         build: {commit ?? 'unknown'}
       </div>
+      <div style={{
+  position: 'fixed',
+  right: 8,
+  bottom: 8,
+  padding: '4px 8px',
+  fontSize: 12,
+  opacity: 0.7,
+  background: 'rgba(0,0,0,0.5)',
+  color: '#fff',
+  borderRadius: 6
+}}>
+  build: {commit || 'local'}
+</div>
     </div>
   );
 }
