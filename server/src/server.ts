@@ -6,6 +6,8 @@ import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 import { calculateDuelSettlement } from './duel_settlement.js';
 
 const DEFAULT_PORT = 8081;
+const HEARTBEAT_INTERVAL_MS = 15000;
+const PONG_MSG = JSON.stringify({ t: 'pong' });
 
 function resolvePort(raw: string | undefined, fallback: number): number {
   if (raw === undefined) {
@@ -41,6 +43,7 @@ let duel = newDuelRound();
 
 const wallets = new Map<string, number>();
 const sockets = new Map<string, WebSocket>();
+const heartbeatTimers = new Set<ReturnType<typeof setInterval>>();
 
 function snapshot(): Snapshot {
   const operatorProfit = totalWageredAll - totalPayoutsAll;
@@ -223,12 +226,43 @@ console.log(`[WS] running on :${PORT}`);
 
 wss.on('connection', (ws) => {
   let uid: string | undefined;
+  let alive = true;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+
   const cleanup = () => {
+    if (heartbeat !== null) {
+      const timer = heartbeat;
+      heartbeat = null;
+      clearInterval(timer);
+      heartbeatTimers.delete(timer);
+    }
     if (!uid) return;
     const current = sockets.get(uid);
     if (current === ws) sockets.delete(uid);
     uid = undefined;
   };
+
+  const ensureHeartbeat = () => {
+    alive = true;
+    if (heartbeat !== null) return;
+    const timer = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        cleanup();
+        return;
+      }
+      if (!alive) {
+        cleanup();
+        try { ws.terminate(); } catch {}
+        return;
+      }
+      alive = false;
+      try { ws.send(PONG_MSG); } catch {}
+    }, HEARTBEAT_INTERVAL_MS);
+    heartbeat = timer;
+    heartbeatTimers.add(timer);
+  };
+
+  ensureHeartbeat();
 
   ws.on('close', cleanup);
   ws.on('error', cleanup);
@@ -236,7 +270,12 @@ wss.on('connection', (ws) => {
   ws.on('message', (buf) => {
     try {
       const msg = JSON.parse(buf.toString()) as ClientMsg;
-      if (msg.t === 'auth') {
+      if (msg.t === 'ping') {
+        ensureHeartbeat();
+        if (ws.readyState === WebSocket.OPEN) {
+          try { ws.send(PONG_MSG); } catch {}
+        }
+      } else if (msg.t === 'auth') {
         uid = hello(ws, msg.uid);
       } else if (msg.t === 'switch_mode') {
         mode = msg.mode;
@@ -271,6 +310,10 @@ export function getSocketCount(): number {
 
 export async function shutdown() {
   clearInterval(loop);
+  for (const timer of heartbeatTimers) {
+    clearInterval(timer);
+  }
+  heartbeatTimers.clear();
   for (const [id, ws] of sockets) {
     sockets.delete(id);
     try { ws.terminate(); } catch {}
