@@ -65,7 +65,8 @@ export type ClientMsg =
   | { t: 'bet'; amount: number; side?: Side }
   | { t: 'cashout' }
   | { t: 'micro'; what: 'speed' | 'defense'; side: Side; value: number }
-  | { t: 'topup'; amount: number };
+  | { t: 'topup'; amount: number }
+  | { t: 'ping' };
 
 export type ServerMsg =
   | { t: 'hello'; uid: string; wallet: Wallet; snapshot: Snapshot }
