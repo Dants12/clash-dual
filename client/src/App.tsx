@@ -20,7 +20,8 @@ const currencyFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2
 });
 
-const formatCurrency = (value: number) => currencyFormatter.format(Number.isFinite(value) ? value : 0);
+const formatCents = (value: number) =>
+  currencyFormatter.format(Number.isFinite(value) ? value / 100 : 0);
 const formatSeconds = (ms: number) => `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 const formatMultiplier = (value: number) => `${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
 const formatMultiplierDelta = (value: number) => `${value >= 0 ? '+' : ''}${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
@@ -37,8 +38,8 @@ const phaseToneMap: Record<string, BadgeTone> = {
   intermission: 'muted'
 };
 
-const QUICK_TOPUPS = [5, 10, 25, 50, 100, 250];
-const BET_PRESETS = [5, 10, 25, 50, 100, 250, 500];
+const QUICK_TOPUPS = [500, 1_000, 2_500, 5_000, 10_000, 25_000];
+const BET_PRESETS = [500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000];
 const THEME_STORAGE_KEY = 'clash-dual-theme';
 
 export default function App() {
@@ -46,7 +47,7 @@ export default function App() {
   const uid = useRef<string>('');
   const [wallet, setWallet] = useState(0);
   const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [amount, setAmount] = useState(50);
+  const [amount, setAmount] = useState(5_000);
   const [side, setSide] = useState<Side>('A');
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [microStep, setMicroStep] = useState(1);
@@ -121,7 +122,7 @@ export default function App() {
       } else if (message.t === 'wallet') {
         const balance = Number(message.wallet?.balance ?? 0);
         setWallet(balance);
-        pushEvent(`Wallet updated · ${formatCurrency(balance)}`);
+        pushEvent(`Wallet updated · ${formatCents(balance)}`);
       } else if (message.t === 'snapshot') {
         handleSnapshot(message.snapshot as Snapshot);
       } else if (message.t === 'event') {
@@ -214,8 +215,8 @@ export default function App() {
     if (!crashRound) {
       return { totalA: 0, totalB: 0, countA: 0, countB: 0 };
     }
-    const totalA = crashRound.betsA?.reduce((sum, bet) => sum + (bet.amount ?? 0), 0) ?? 0;
-    const totalB = crashRound.betsB?.reduce((sum, bet) => sum + (bet.amount ?? 0), 0) ?? 0;
+    const totalA = crashRound.betsA?.reduce((sum, bet) => sum + Number(bet.amount ?? 0), 0) ?? 0;
+    const totalB = crashRound.betsB?.reduce((sum, bet) => sum + Number(bet.amount ?? 0), 0) ?? 0;
     return { totalA, totalB, countA: crashRound.betsA?.length ?? 0, countB: crashRound.betsB?.length ?? 0 };
   }, [crashRound]);
 
@@ -228,7 +229,7 @@ export default function App() {
     let countA = 0;
     let countB = 0;
     for (const bet of duelRound.bets ?? []) {
-      const amount = bet.amount ?? 0;
+      const amount = Number(bet.amount ?? 0);
       if (bet.side === 'A') {
         totalA += amount;
         countA += 1;
@@ -256,7 +257,7 @@ export default function App() {
 
       const rtp = Number.isFinite(snap.rtpAvg) ? snap.rtpAvg : 0;
 
-      if (wallet < 150) {
+      if (wallet < 15_000) {
         return { tone: 'warning' as BadgeTone, label: 'High risk', hint: 'Low balance reserves' };
       }
 
@@ -273,7 +274,7 @@ export default function App() {
     [snap, wallet]
   );
 
-  const sanitizedAmount = Number.isFinite(amount) ? amount : 0;
+  const sanitizedAmount = Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
   const canPlaceBet =
     isLive &&
     sanitizedAmount > 0 &&
@@ -281,8 +282,8 @@ export default function App() {
     ((mode === 'crash_dual' && crashRound?.phase === 'betting') || (mode === 'duel_ab' && duelRound?.phase === 'betting'));
   const canCashout = isLive && mode === 'crash_dual' && crashRound?.phase === 'running';
   const canAdjustMicro = isLive && mode === 'duel_ab';
-  const sliderMax = useMemo(() => Math.max(100, wallet, sanitizedAmount), [sanitizedAmount, wallet]);
-  const sliderStep = sliderMax > 500 ? 25 : sliderMax > 200 ? 10 : 5;
+  const sliderMax = useMemo(() => Math.max(10_000, wallet, sanitizedAmount), [sanitizedAmount, wallet]);
+  const sliderStep = sliderMax > 50_000 ? 2_500 : sliderMax > 20_000 ? 1_000 : 500;
   const sliderDisabled = wallet <= 0 && sanitizedAmount <= 0;
   const canEditTargets = mode === 'crash_dual' && !!crashRound;
 
@@ -312,9 +313,9 @@ export default function App() {
         pushEvent('Top-up unavailable while offline');
         return;
       }
-      const amountToSend = Math.max(1, Math.floor(value));
+      const amountToSend = Math.max(1, Math.round(value));
       send({ t: 'topup', amount: amountToSend });
-      pushEvent(`Top-up requested · ${formatCurrency(amountToSend)}`);
+      pushEvent(`Top-up requested · ${formatCents(amountToSend)}`);
     },
     [isLive, pushEvent, send]
   );
@@ -339,15 +340,15 @@ export default function App() {
   const activeTargetPlan = targetPlans[side];
 
   const placeBet = useCallback(() => {
-    const value = Number.isFinite(amount) ? amount : 0;
+    const value = sanitizedAmount;
     const phaseOk = (mode === 'crash_dual' && crashRound?.phase === 'betting') || (mode === 'duel_ab' && duelRound?.phase === 'betting');
     if (!isLive || !phaseOk || value <= 0 || value > wallet) return;
-    const payload = { t: 'bet', amount: Math.max(1, Math.floor(value)), side };
+    const payload = { t: 'bet', amount: Math.max(1, Math.round(value)), side };
     send(payload);
     const plannedTarget = targetPlans[side];
     const planSuffix = mode === 'crash_dual' && plannedTarget != null ? ` (target ${formatMultiplier(plannedTarget)})` : '';
-    pushEvent(`Bet placed · ${formatCurrency(payload.amount)} on side ${side}${planSuffix}`);
-  }, [amount, crashRound?.phase, duelRound?.phase, isLive, mode, pushEvent, send, side, targetPlans, wallet]);
+    pushEvent(`Bet placed · ${formatCents(payload.amount)} on side ${side}${planSuffix}`);
+  }, [crashRound?.phase, duelRound?.phase, isLive, mode, pushEvent, sanitizedAmount, send, side, targetPlans, wallet]);
 
   const cashout = useCallback(() => {
     if (!isLive || mode !== 'crash_dual' || crashRound?.phase !== 'running') return;
@@ -381,8 +382,8 @@ export default function App() {
           { label: 'Time left', value: formatSeconds(crashTimeLeft) },
           { label: 'A multiplier', value: formatMultiplier(crashRound.mA), hint: `Target ${formatMultiplier(crashRound.targetA)}` },
           { label: 'B multiplier', value: formatMultiplier(crashRound.mB), hint: `Target ${formatMultiplier(crashRound.targetB)}` },
-          { label: 'Burned', value: formatCurrency(crashRound.burned) },
-          { label: 'Payouts', value: formatCurrency(crashRound.payouts) }
+          { label: 'Burned', value: formatCents(crashRound.burned) },
+          { label: 'Payouts', value: formatCents(crashRound.payouts) }
         ]
       : []
     : duelRound
@@ -390,7 +391,7 @@ export default function App() {
           { label: 'Round ID', value: shortId(duelRound.id) },
           { label: 'Phase', value: duelRound.phase },
           { label: 'Time left', value: formatSeconds(duelTimeLeft) },
-          { label: 'Pot size', value: formatCurrency(duelTotals.total) },
+          { label: 'Pot size', value: formatCents(duelTotals.total) },
           { label: 'A speed', value: duelRound.micro.A.speed },
           { label: 'A defense', value: duelRound.micro.A.defense },
           { label: 'B speed', value: duelRound.micro.B.speed },
@@ -488,7 +489,7 @@ export default function App() {
           <div className="app-main__summary">
             <div className="app-main__summary-item">
               <span className="app-main__summary-label">Wallet</span>
-              <span className="app-main__summary-value">{formatCurrency(wallet)}</span>
+              <span className="app-main__summary-value">{formatCents(wallet)}</span>
             </div>
             <div className="app-main__summary-item">
               <span className="app-main__summary-label">Game mode</span>
@@ -513,7 +514,7 @@ export default function App() {
             <Card title="Wallet &amp; Mode" subtitle="Session overview">
               <div className="wallet-balance">
                 <span className="wallet-balance__label">Balance</span>
-                <div className="wallet-balance__value">{formatCurrency(wallet)}</div>
+                <div className="wallet-balance__value">{formatCents(wallet)}</div>
                 <div className="wallet-balance__tags">
                   <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
                   <Badge tone={riskProfile.tone}>Risk · {riskProfile.label}</Badge>
@@ -529,7 +530,7 @@ export default function App() {
                     onClick={() => requestTopUp(value)}
                     disabled={!isLive}
                   >
-                    +{formatCurrency(value)}
+                    +{formatCents(value)}
                   </button>
                 ))}
               </div>
@@ -646,16 +647,16 @@ export default function App() {
                   onClick={() => adjustAmount(-sliderStep)}
                   disabled={sanitizedAmount <= 0}
                 >
-                  −{sliderStep}
+                  −{formatCents(sliderStep)}
                 </button>
-                <span className="bet-stepper__value">{formatCurrency(sanitizedAmount)}</span>
+                <span className="bet-stepper__value">{formatCents(sanitizedAmount)}</span>
                 <button
                   className="button button--secondary button--compact"
                   type="button"
                   onClick={() => adjustAmount(sliderStep)}
                   disabled={wallet <= 0}
                 >
-                  +{sliderStep}
+                  +{formatCents(sliderStep)}
                 </button>
               </div>
 
@@ -668,7 +669,7 @@ export default function App() {
                     data-active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
                     onClick={() => setAmount(wallet > 0 ? Math.min(value, wallet) : value)}
                   >
-                    {formatCurrency(value)}
+                    {formatCents(value)}
                   </button>
                 ))}
               </div>
@@ -691,8 +692,8 @@ export default function App() {
                   disabled={sliderDisabled}
                 />
                 <div className="bet-slider__scale">
-                  <span>0</span>
-                  <span>{formatCurrency(sliderMax)}</span>
+                  <span>{formatCents(0)}</span>
+                  <span>{formatCents(sliderMax)}</span>
                 </div>
               </div>
 
@@ -861,8 +862,8 @@ export default function App() {
                 value={<Badge tone={connectionTone}>{connectionLabel}</Badge>}
                 hint={isLive ? 'Realtime updates active' : 'Reconnect to resume updates'}
               />
-              <MetricRow label="Bankroll" value={formatCurrency(snap?.bankroll ?? 0)} />
-              <MetricRow label="Jackpot" value={formatCurrency(snap?.jackpot ?? 0)} />
+              <MetricRow label="Bankroll" value={formatCents(snap?.bankroll ?? 0)} />
+              <MetricRow label="Jackpot" value={formatCents(snap?.jackpot ?? 0)} />
               <MetricRow label="RTP average" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} />
               <MetricRow label="Total rounds" value={snap?.rounds ?? 0} />
             </Card>
@@ -871,8 +872,8 @@ export default function App() {
               <MetricRow label="Completed rounds" value={roundStats?.totalRounds ?? snap?.rounds ?? 0} />
               <MetricRow label="Crash rounds" value={roundStats?.crashRounds ?? 0} />
               <MetricRow label="Duel rounds" value={roundStats?.duelRounds ?? 0} />
-              <MetricRow label="Total wagers" value={formatCurrency(roundStats?.totalWagered ?? 0)} />
-              <MetricRow label="Operator profit" value={formatCurrency(roundStats?.operatorProfit ?? 0)} />
+              <MetricRow label="Total wagers" value={formatCents(roundStats?.totalWagered ?? 0)} />
+              <MetricRow label="Operator profit" value={formatCents(roundStats?.operatorProfit ?? 0)} />
               <MetricRow
                 label="Operator edge"
                 value={formatPercent(roundStats?.operatorEdge ?? 0)}
@@ -883,18 +884,18 @@ export default function App() {
             <Card title="Round totals" subtitle={`${modeLabel} pools`}>
               {mode === 'crash_dual' && crashRound && (
                 <>
-                  <MetricRow label="Total pool" value={formatCurrency(crashTotals.totalA + crashTotals.totalB)} />
-                  <MetricRow label="Side A" value={formatCurrency(crashTotals.totalA)} hint={`${crashTotals.countA} bets`} />
-                  <MetricRow label="Side B" value={formatCurrency(crashTotals.totalB)} hint={`${crashTotals.countB} bets`} />
-                  <MetricRow label="Burned" value={formatCurrency(crashRound.burned)} />
-                  <MetricRow label="Payouts" value={formatCurrency(crashRound.payouts)} />
+                  <MetricRow label="Total pool" value={formatCents(crashTotals.totalA + crashTotals.totalB)} />
+                  <MetricRow label="Side A" value={formatCents(crashTotals.totalA)} hint={`${crashTotals.countA} bets`} />
+                  <MetricRow label="Side B" value={formatCents(crashTotals.totalB)} hint={`${crashTotals.countB} bets`} />
+                  <MetricRow label="Burned" value={formatCents(crashRound.burned)} />
+                  <MetricRow label="Payouts" value={formatCents(crashRound.payouts)} />
                 </>
               )}
               {mode === 'duel_ab' && duelRound && (
                 <>
-                  <MetricRow label="Total pot" value={formatCurrency(duelTotals.total)} />
-                  <MetricRow label="Side A" value={formatCurrency(duelTotals.totalA)} hint={`${duelTotals.countA} bets`} />
-                  <MetricRow label="Side B" value={formatCurrency(duelTotals.totalB)} hint={`${duelTotals.countB} bets`} />
+                  <MetricRow label="Total pot" value={formatCents(duelTotals.total)} />
+                  <MetricRow label="Side A" value={formatCents(duelTotals.totalA)} hint={`${duelTotals.countA} bets`} />
+                  <MetricRow label="Side B" value={formatCents(duelTotals.totalB)} hint={`${duelTotals.countB} bets`} />
                   <MetricRow label="Winner" value={duelRound.winner ?? '—'} />
                 </>
               )}
