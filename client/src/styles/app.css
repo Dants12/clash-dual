@@ -1272,12 +1272,12 @@ input[type='range'] {
 
 @media (max-width: 1100px) {
   .layout {
-    --layout-max: 100%;
+  /*  --layout-max: 100%;
     --layout-hpad: clamp(22px, 7vw, 38px);
     --column-side: clamp(250px, 46vw, 300px);
     --column-center: clamp(420px, 72vw, 560px);
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--gap-md);
+    gap: var(--gap-md);*/
   }
 
   .column-left,
