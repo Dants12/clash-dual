@@ -22,14 +22,19 @@ function resolvePort(raw: string | undefined, fallback: number): number {
 }
 
 const PORT = resolvePort(process.env.PORT, DEFAULT_PORT);
+const INITIAL_BANKROLL = 100000;
 
 let mode: GameMode = 'crash_dual';
-let bankroll = 100000;
+let bankroll = INITIAL_BANKROLL;
 let jackpot = 0;
 let rtpAvg = 0;
 let rounds = 0;
 let rtpSum = 0;
 let rtpRounds = 0;
+let crashRounds = 0;
+let duelRounds = 0;
+let totalWageredAll = 0;
+let totalPayoutsAll = 0;
 
 let crash = newCrashRound();
 let duel = newDuelRound();
@@ -38,7 +43,27 @@ const wallets = new Map<string, number>();
 const sockets = new Map<string, WebSocket>();
 
 function snapshot(): Snapshot {
-  return { mode, crash, duel, bankroll, jackpot, rtpAvg, rounds };
+  const operatorProfit = totalWageredAll - totalPayoutsAll;
+  const operatorEdge = totalWageredAll > 0 ? (operatorProfit / totalWageredAll) * 100 : 0;
+  return {
+    mode,
+    crash,
+    duel,
+    bankroll,
+    jackpot,
+    rtpAvg,
+    rounds,
+    stats: {
+      totalRounds: rounds,
+      crashRounds,
+      duelRounds,
+      totalWagered: totalWageredAll,
+      totalPayouts: totalPayoutsAll,
+      operatorProfit,
+      operatorEdge,
+      operatorEdgeTarget: 4
+    }
+  };
 }
 
 function hello(ws: WebSocket, uid?: string): string {
@@ -128,20 +153,23 @@ const loop = setInterval(() => {
           }
         }
       }
-      const totalWagered =
+      const roundWagered =
         crash.betsA.reduce((sum, bet) => sum + bet.amount, 0) +
         crash.betsB.reduce((sum, bet) => sum + bet.amount, 0);
       crash.burned = burned;
       crash.payouts = payouts;
-      bankroll += totalWagered - payouts;
+      bankroll += roundWagered - payouts;
       jackpot += Math.max(0, burned * 0.01);
-      const roundRtp = totalWagered > 0 ? (payouts / totalWagered) * 100 : 0;
-      if (totalWagered > 0) {
+      const roundRtp = roundWagered > 0 ? (payouts / roundWagered) * 100 : 0;
+      if (roundWagered > 0) {
         rtpSum += roundRtp;
         rtpRounds += 1;
         rtpAvg = rtpSum / rtpRounds;
       }
       rounds += 1;
+      crashRounds += 1;
+      totalWageredAll += roundWagered;
+      totalPayoutsAll += payouts;
       nextCrash = newCrashRound();
     }
   } else {
@@ -160,6 +188,9 @@ const loop = setInterval(() => {
         rtpAvg = rtpSum / rtpRounds;
       }
       rounds += 1;
+      duelRounds += 1;
+      totalWageredAll += burned;
+      totalPayoutsAll += roundPayouts;
       duel = newDuelRound();
     }
   }

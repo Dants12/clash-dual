@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CrashDualCanvas from './games/CrashDualCanvas';
 import DuelABPanel from './games/DuelABPanel';
 import { createWS, persistUid } from './ws';
-import type { GameMode, Side, Snapshot } from './types';
+import type { GameMode, RoundStats, Side, Snapshot } from './types';
 import { Card } from './ui/Card';
 import { Badge, type BadgeTone } from './ui/Badge';
 import { MetricRow } from './ui/MetricRow';
@@ -24,6 +24,7 @@ const formatCurrency = (value: number) => currencyFormatter.format(Number.isFini
 const formatSeconds = (ms: number) => `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 const formatMultiplier = (value: number) => `${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
 const formatMultiplierDelta = (value: number) => `${value >= 0 ? '+' : ''}${(Number.isFinite(value) ? value : 0).toFixed(2)}x`;
+const formatPercent = (value: number) => `${(Number.isFinite(value) ? value : 0).toFixed(2)}%`;
 const shortId = (value?: string) => (value ? value.slice(0, 8).toUpperCase() : '—');
 const formatMode = (mode: GameMode) => (mode === 'crash_dual' ? 'Crash Dual' : 'A/B Duel');
 const eventId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -142,6 +143,7 @@ export default function App() {
   const mode: GameMode = snap?.mode ?? 'crash_dual';
   const crashRound = snap?.crash;
   const duelRound = snap?.duel;
+  const roundStats: RoundStats | undefined = snap?.stats;
 
   const now = Date.now();
   const crashTimeLeft = crashRound ? Math.max(0, crashRound.endsAt - now) : 0;
@@ -748,10 +750,28 @@ export default function App() {
 
           <div className="column column-right">
             <Card title="Investor panel" subtitle="House overview">
+              <MetricRow
+                label="Connection"
+                value={<Badge tone={connectionTone}>{connectionLabel}</Badge>}
+                hint={isLive ? 'Realtime updates active' : 'Reconnect to resume updates'}
+              />
               <MetricRow label="Bankroll" value={formatCurrency(snap?.bankroll ?? 0)} />
               <MetricRow label="Jackpot" value={formatCurrency(snap?.jackpot ?? 0)} />
               <MetricRow label="RTP average" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} />
               <MetricRow label="Total rounds" value={snap?.rounds ?? 0} />
+            </Card>
+
+            <Card title="Round statistics" subtitle="Performance snapshot">
+              <MetricRow label="Completed rounds" value={roundStats?.totalRounds ?? snap?.rounds ?? 0} />
+              <MetricRow label="Crash rounds" value={roundStats?.crashRounds ?? 0} />
+              <MetricRow label="Duel rounds" value={roundStats?.duelRounds ?? 0} />
+              <MetricRow label="Total wagers" value={formatCurrency(roundStats?.totalWagered ?? 0)} />
+              <MetricRow label="Operator profit" value={formatCurrency(roundStats?.operatorProfit ?? 0)} />
+              <MetricRow
+                label="Operator edge"
+                value={formatPercent(roundStats?.operatorEdge ?? 0)}
+                hint={`Target ${formatPercent(roundStats?.operatorEdgeTarget ?? 4)}`}
+              />
             </Card>
 
             <Card title="Round totals" subtitle={`${modeLabel} pools`}>
