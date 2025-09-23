@@ -49,6 +49,12 @@ export VITE_COMMIT=$GIT_SHA
 # --- фронт (без sudo; сделай владельцем каталог один раз: sudo chown -R $USER:$USER /var/www/clashdual)
 if [ -f "$CLI_DIR/package.json" ]; then
   log "Client build..."
+
+  # <<< ДОБАВЬ ЭТО >>>
+  GIT_SHA=$(git rev-parse --short HEAD)
+  export VITE_COMMIT="$GIT_SHA"
+  # <<< ДОБАВЛЕНО >>>
+
   cd "$CLI_DIR"
   npm ci || npm i
   npm run build
