@@ -55,7 +55,8 @@ export default function App() {
   const pushEvent = useCallback((text: string) => {
     setEvents((prev) => [{ id: eventId(), text, ts: Date.now() }, ...prev].slice(0, 30));
   }, []);
-
+const COMMIT = import.meta.env.VITE_COMMIT;
+<footer style={{opacity:.6,fontSize:12}}>build: {COMMIT}</footer>
   const handleSnapshot = useCallback(
     (incoming: Snapshot) => {
       setSnap((prev) => {
