@@ -14,13 +14,14 @@ import {
   BetSnapshot,
   CrashRoundSnapshot,
   DuelRoundSnapshot,
-  WalletSnapshot
+  WalletSnapshot,
+  CrashFairInfo
 } from './types.js';
 import { newCrashRound, tickCrash, transitionCrash, addBetCrash, canBet as canBetCrash } from './game_crash_dual.js';
 import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 import { calculateDuelSettlement } from './duel_settlement.js';
 import { ClientMsgSchema } from './schema.js';
-import { randomSeed, roundCrash, roundDuel, sha256 } from './fair.js';
+import { randomSeed, roundCrash, roundDuel, sha256, crashBSampler } from './fair.js';
 import { logger } from './log.js';
 import {
   Amount,
@@ -71,9 +72,7 @@ const HISTORY_LIMIT = 200;
 interface CrashHistoryEntry {
   nonce: number;
   roundId: string;
-  serverSeed: string;
-  serverSeedHash: string;
-  clientSeed: string;
+  fair: CrashFairInfo & { serverSeed: string };
 }
 
 interface DuelHistoryEntry {
@@ -172,7 +171,7 @@ function buildCrashFairResponse(nonce?: number): ServerMsg | null {
         clientSeed: crash.fair.clientSeed,
         nonce: crash.fair.nonce
       });
-      return { ...base, crash: { targetA, targetB } };
+      return { ...base, crash: { targetA, targetB, bStream: crash.fair.bStream } };
     }
     return base;
   }
@@ -181,19 +180,19 @@ function buildCrashFairResponse(nonce?: number): ServerMsg | null {
     return null;
   }
   const { targetA, targetB } = roundCrash({
-    serverSeed: entry.serverSeed,
-    clientSeed: entry.clientSeed,
-    nonce: entry.nonce
+    serverSeed: entry.fair.serverSeed,
+    clientSeed: entry.fair.clientSeed,
+    nonce: entry.fair.nonce
   });
   return {
     t: 'fair',
     mode: 'crash_dual',
-    nonce: entry.nonce,
+    nonce: entry.fair.nonce,
     roundId: entry.roundId,
-    clientSeed: entry.clientSeed,
-    serverSeedHash: entry.serverSeedHash,
-    serverSeed: entry.serverSeed,
-    crash: { targetA, targetB }
+    clientSeed: entry.fair.clientSeed,
+    serverSeedHash: entry.fair.serverSeedHash,
+    serverSeed: entry.fair.serverSeed,
+    crash: { targetA, targetB, bStream: entry.fair.bStream }
   };
 }
 
@@ -253,19 +252,23 @@ function buildDuelFairResponse(nonce?: number): ServerMsg | null {
 }
 
 function makeCrashRound(): CrashRound {
-  const { targetA, targetB } = roundCrash({
+  const config = {
     serverSeed: crashFairState.serverSeed,
     clientSeed,
     nonce: crashFairState.nonce
-  });
+  };
+  const { targetA, targetB } = roundCrash(config);
+  const sampler = crashBSampler(config);
   return newCrashRound({
     targetA,
     targetB,
     fair: {
-      serverSeedHash: sha256(crashFairState.serverSeed),
-      clientSeed,
-      nonce: crashFairState.nonce
-    }
+      serverSeedHash: sha256(config.serverSeed),
+      clientSeed: config.clientSeed,
+      nonce: config.nonce,
+      bStream: { steps: 0, valuesUsed: 0 }
+    },
+    streamB: { sampler }
   });
 }
 
@@ -503,12 +506,15 @@ const loop = setInterval(() => {
       totalWageredAll += roundWagered;
       totalPayoutsAll += payouts;
       crash.fair.serverSeed = crashFairState.serverSeed;
+      const fairHistory: CrashFairInfo & { serverSeed: string } = {
+        ...crash.fair,
+        serverSeed: crashFairState.serverSeed,
+        bStream: { ...crash.fair.bStream }
+      };
       storeCrashHistory({
         nonce: crash.fair.nonce,
         roundId: crash.id,
-        serverSeed: crashFairState.serverSeed,
-        serverSeedHash: crash.fair.serverSeedHash,
-        clientSeed: crash.fair.clientSeed
+        fair: fairHistory
       });
       crashFairState.nonce += 1;
       crashFairState.serverSeed = randomSeed();
