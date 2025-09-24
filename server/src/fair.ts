@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
+import type { DeterministicSampler } from './types.js';
 
 const HMAC_PREFIX_BYTES = 13; // 52 bits -> 13 hex chars
 const TWO_POW_52 = 2 ** 52;
@@ -67,6 +68,11 @@ export function roundCrash(config: RoundConfig): CrashRoundResult {
   const targetA = crashFromHmac(hmacA, { edge: 0.04, min: 1.2, max: 250 });
   const targetB = crashFromHmac(hmacB, { edge: 0.015, min: 1.1, max: 400 });
   return { targetA, targetB, hmacA, hmacB };
+}
+
+export function crashBSampler(config: RoundConfig): DeterministicSampler {
+  const base = `${config.clientSeed}:${config.nonce}:B`;
+  return (index: number) => uniformFromHmac(hmacHex(config.serverSeed, `${base}:${index}`));
 }
 
 export function roundDuel(config: RoundConfig): DuelRoundResult {

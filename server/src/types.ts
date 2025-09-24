@@ -4,6 +4,8 @@ export type Side = 'A' | 'B';
 export interface ClientAuth { uid: string; }
 export type Amount = bigint;
 
+export type DeterministicSampler = (index: number) => number;
+
 export interface Wallet {
   balance: Amount;
 }
@@ -32,6 +34,7 @@ export interface CrashRound {
   payouts: Amount;
   seenBetIds: Set<string>;
   fair: CrashFairInfo;
+  streamB: CrashRoundStream;
 }
 
 export interface DuelRound {
@@ -54,7 +57,20 @@ export interface BaseFairInfo {
   serverSeed?: string;
 }
 
-export type CrashFairInfo = BaseFairInfo;
+export interface CrashFairStreamInfo {
+  steps: number;
+  valuesUsed: number;
+}
+
+export interface CrashFairInfo extends BaseFairInfo {
+  bStream: CrashFairStreamInfo;
+}
+
+export interface CrashRoundStream {
+  sampler: DeterministicSampler;
+  steps: number;
+  valuesUsed: number;
+}
 
 export interface DuelFairInfo extends BaseFairInfo {
   roll?: number;
@@ -77,7 +93,7 @@ export interface BetSnapshot extends Omit<Bet, 'amount'> {
   amount: number;
 }
 
-export interface CrashRoundSnapshot extends Omit<CrashRound, 'betsA' | 'betsB' | 'burned' | 'payouts' | 'seenBetIds'> {
+export interface CrashRoundSnapshot extends Omit<CrashRound, 'betsA' | 'betsB' | 'burned' | 'payouts' | 'seenBetIds' | 'streamB'> {
   betsA: BetSnapshot[];
   betsB: BetSnapshot[];
   burned: number;
@@ -130,7 +146,7 @@ export type FairServerMsg =
       clientSeed: string;
       serverSeedHash: string;
       serverSeed?: string;
-      crash?: { targetA: number; targetB: number };
+      crash?: { targetA: number; targetB: number; bStream: CrashFairStreamInfo };
     }
   | {
       t: 'fair';

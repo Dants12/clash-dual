@@ -32,7 +32,12 @@ type Queue = {
 };
 
 function makeFair(nonce: number): CrashFairInfo {
-  return { clientSeed: 'test-client', serverSeedHash: `hash-${nonce}`, nonce };
+  return {
+    clientSeed: 'test-client',
+    serverSeedHash: `hash-${nonce}`,
+    nonce,
+    bStream: { steps: 0, valuesUsed: 0 }
+  };
 }
 
 function makeDuelFair(nonce: number): DuelFairInfo {
@@ -82,7 +87,12 @@ function createMessageQueue(ws: WebSocket): Queue {
 }
 
 test('crash and duel rounds record seen bet ids', () => {
-  const crashRound = newCrashRound({ targetA: 1.5, targetB: 1.7, fair: makeFair(1) });
+  const crashRound = newCrashRound({
+    targetA: 1.5,
+    targetB: 1.7,
+    fair: makeFair(1),
+    streamB: { sampler: () => 0 }
+  });
   const bet: Bet = { id: 'crash-1', uid: 'player-1', amount: 50n };
   assert.equal(addBetCrash(crashRound, 'A', bet), true);
   assert.equal(addBetCrash(crashRound, 'A', { ...bet }), false);
