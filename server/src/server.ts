@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuid } from 'uuid';
 import {
@@ -19,6 +21,7 @@ import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 import { calculateDuelSettlement } from './duel_settlement.js';
 import { ClientMsgSchema } from './schema.js';
 import { randomSeed, roundCrash, roundDuel, sha256 } from './fair.js';
+import { logger } from './log.js';
 import {
   Amount,
   JACKPOT_BPS,
@@ -29,6 +32,15 @@ import {
   percentage,
   sanitizePositiveAmount
 } from './money.js';
+import {
+  activeClientsGauge,
+  collectMetrics,
+  eventsCounter,
+  metricsContentType,
+  multiplierHistogram,
+  profitLossHistogram,
+  rtpHistogram
+} from './metrics.js';
 
 const DEFAULT_PORT = 8081;
 const HEARTBEAT_INTERVAL_MS = 15000;
@@ -47,7 +59,7 @@ function resolvePort(raw: string | undefined, fallback: number): number {
     return parsed;
   }
 
-  console.warn(`[WS] Invalid PORT environment value "${raw}", falling back to :${fallback}`);
+  logger.warn(`[WS] Invalid PORT environment value "${raw}", falling back to :${fallback}`);
   return fallback;
 }
 
@@ -367,11 +379,13 @@ function hello(ws: WebSocket, uid?: string): string {
   const balance = wallets.get(id)!;
   const msg: ServerMsg = { t: 'hello', uid: id, wallet: toWalletSnapshot(balance), snapshot: snapshot() };
   ws.send(JSON.stringify(msg));
+  eventsCounter.inc({ direction: 'outgoing', event: msg.t });
   return id;
 }
 
 function broadcast(msg: ServerMsg) {
   const s = JSON.stringify(msg);
+  eventsCounter.inc({ direction: 'outgoing', event: msg.t });
   for (const ws of sockets.values()) {
     if (ws.readyState !== WebSocket.OPEN) continue;
     try { ws.send(s); } catch {}
@@ -381,6 +395,7 @@ function broadcast(msg: ServerMsg) {
 function sendTo(uid: string, msg: ServerMsg) {
   const ws = sockets.get(uid);
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  eventsCounter.inc({ direction: 'outgoing', event: msg.t });
   try { ws.send(JSON.stringify(msg)); } catch {}
 }
 
@@ -471,6 +486,13 @@ const loop = setInterval(() => {
       bankroll += roundWagered - payouts;
       jackpot += applyBps(burned, JACKPOT_BPS);
       const roundRtp = roundWagered > 0n ? percentage(payouts, roundWagered) : 0;
+      multiplierHistogram.observe({ mode: 'crash_dual', side: 'A' }, endA);
+      multiplierHistogram.observe({ mode: 'crash_dual', side: 'B' }, endB);
+      rtpHistogram.observe({ mode: 'crash_dual' }, roundRtp);
+      const roundProfit = roundWagered - payouts;
+      const profitOutcome = roundProfit >= 0n ? 'profit' : 'loss';
+      const profitValue = amountToNumber(roundProfit >= 0n ? roundProfit : -roundProfit);
+      profitLossHistogram.observe({ mode: 'crash_dual', outcome: profitOutcome }, profitValue);
       if (roundWagered > 0n) {
         rtpSum += roundRtp;
         rtpRounds += 1;
@@ -505,6 +527,11 @@ const loop = setInterval(() => {
       bankroll += burned - roundPayouts;
       jackpot += applyBps(burned, JACKPOT_BPS);
       const roundRtp = burned > 0n ? percentage(roundPayouts, burned) : 0;
+      rtpHistogram.observe({ mode: 'duel_ab' }, roundRtp);
+      const roundProfit = burned - roundPayouts;
+      const profitOutcome = roundProfit >= 0n ? 'profit' : 'loss';
+      const profitValue = amountToNumber(roundProfit >= 0n ? roundProfit : -roundProfit);
+      profitLossHistogram.observe({ mode: 'duel_ab', outcome: profitOutcome }, profitValue);
       if (burned > 0n) {
         rtpSum += roundRtp;
         rtpRounds += 1;
@@ -543,10 +570,36 @@ const loop = setInterval(() => {
 let fatalErrorHandled = false;
 const INVALID_PAYLOAD_MESSAGE = JSON.stringify({ t: 'error', message: 'invalid_payload' });
 
-const wss = new WebSocketServer({ port: PORT });
-wss.on('error', (error) => {
+const httpServer = createServer(async (req, res) => {
+  const url = req.url ?? '/';
+  const [path] = url.split('?');
+
+  if (path === '/metrics') {
+    if (req.method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'text/plain' });
+      res.end('Method Not Allowed');
+      return;
+    }
+    try {
+      const metrics = await collectMetrics();
+      res.writeHead(200, { 'Content-Type': metricsContentType });
+      res.end(metrics);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error({ err: error }, `[Metrics] failed to collect metrics: ${message}`);
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Metrics collection failed');
+    }
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.end('Not Found');
+});
+
+function handleFatalError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`[WS] WebSocket server error on :${PORT}: ${message}`, error);
+  logger.error({ err: error }, `[WS] WebSocket server error on :${PORT}: ${message}`);
   if (fatalErrorHandled) return;
   fatalErrorHandled = true;
   if (process.exitCode === undefined || process.exitCode === 0) {
@@ -554,21 +607,51 @@ wss.on('error', (error) => {
   }
   void shutdown().catch((shutdownError) => {
     const shutdownMessage = shutdownError instanceof Error ? shutdownError.message : String(shutdownError);
-    console.error(`[WS] error while shutting down after failure: ${shutdownMessage}`, shutdownError);
+    logger.error({ err: shutdownError }, `[WS] error while shutting down after failure: ${shutdownMessage}`);
   });
   setImmediate(() => {
     try {
       process.exit(1);
     } catch {}
   });
+}
+
+httpServer.on('error', handleFatalError);
+
+const wss = new WebSocketServer({ server: httpServer });
+wss.on('error', handleFatalError);
+
+httpServer.listen(PORT, () => {
+  const address = httpServer.address();
+  let actualPort: number | string = PORT;
+  if (typeof address === 'object' && address !== null) {
+    actualPort = (address as AddressInfo).port;
+  } else if (typeof address === 'string') {
+    actualPort = address;
+  }
+  logger.info(`[WS] running on :${actualPort}`);
 });
-console.log(`[WS] running on :${PORT}`);
 
 wss.on('connection', (ws, request) => {
   let uid: string | undefined;
   let alive = true;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
   const ip = request?.socket?.remoteAddress ?? 'unknown';
+  let gaugeMarked = false;
+
+  const markClientActive = () => {
+    if (!gaugeMarked) {
+      activeClientsGauge.inc();
+      gaugeMarked = true;
+    }
+  };
+
+  const releaseClientActive = () => {
+    if (gaugeMarked) {
+      activeClientsGauge.dec();
+      gaugeMarked = false;
+    }
+  };
 
   const cleanup = () => {
     if (heartbeat !== null) {
@@ -577,6 +660,7 @@ wss.on('connection', (ws, request) => {
       clearInterval(timer);
       heartbeatTimers.delete(timer);
     }
+    releaseClientActive();
     if (!uid) return;
     const current = sockets.get(uid);
     if (current === ws) sockets.delete(uid);
@@ -597,12 +681,16 @@ wss.on('connection', (ws, request) => {
         return;
       }
       alive = false;
-      try { ws.send(PONG_MSG); } catch {}
+      try {
+        ws.send(PONG_MSG);
+      } catch {}
+      eventsCounter.inc({ direction: 'outgoing', event: 'pong' });
     }, HEARTBEAT_INTERVAL_MS);
     heartbeat = timer;
     heartbeatTimers.add(timer);
   };
 
+  markClientActive();
   ensureHeartbeat();
 
   ws.on('close', cleanup);
@@ -613,11 +701,12 @@ wss.on('connection', (ws, request) => {
     try {
       ws.send(INVALID_PAYLOAD_MESSAGE);
     } catch {}
+    eventsCounter.inc({ direction: 'outgoing', event: 'invalid_payload' });
   };
 
   const rejectInvalidPayload = (reason: string) => {
     const formatted = typeof reason === 'string' && reason.length > 0 ? reason : 'unknown reason';
-    console.warn(`[WS] invalid payload from ip=${ip} uid=${uid ?? 'unknown'}: ${formatted}`);
+    logger.warn(`[WS] invalid payload from ip=${ip} uid=${uid ?? 'unknown'}: ${formatted}`);
     sendInvalidPayload();
   };
 
@@ -627,6 +716,7 @@ wss.on('connection', (ws, request) => {
       raw = JSON.parse(buf.toString());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      eventsCounter.inc({ direction: 'incoming', event: 'invalid_json' });
       rejectInvalidPayload(message);
       return;
     }
@@ -639,15 +729,21 @@ wss.on('connection', (ws, request) => {
           return `${path}: ${issue.message}`;
         })
         .join('; ') || parsed.error.message;
+      eventsCounter.inc({ direction: 'incoming', event: 'invalid_schema' });
       rejectInvalidPayload(message);
       return;
     }
 
     const msg: ClientMsg = parsed.data;
+    eventsCounter.inc({ direction: 'incoming', event: msg.t });
     const rateLimitKey = uid ?? ip;
     if (!consumeRateLimitToken(rateLimitKey)) {
+      eventsCounter.inc({ direction: 'incoming', event: 'rate_limited' });
       if (ws.readyState === WebSocket.OPEN) {
-        try { ws.send(RATE_LIMIT_MESSAGE); } catch {}
+        try {
+          ws.send(RATE_LIMIT_MESSAGE);
+        } catch {}
+        eventsCounter.inc({ direction: 'outgoing', event: 'rate_limit' });
       }
       return;
     }
@@ -655,7 +751,10 @@ wss.on('connection', (ws, request) => {
       if (msg.t === 'ping') {
         ensureHeartbeat();
         if (ws.readyState === WebSocket.OPEN) {
-          try { ws.send(PONG_MSG); } catch {}
+          try {
+            ws.send(PONG_MSG);
+          } catch {}
+          eventsCounter.inc({ direction: 'outgoing', event: 'pong' });
         }
       } else if (msg.t === 'auth') {
         uid = hello(ws, msg.uid);
@@ -688,9 +787,15 @@ wss.on('connection', (ws, request) => {
         const fairResponse = msg.mode === 'crash_dual' ? buildCrashFairResponse(msg.nonce) : buildDuelFairResponse(msg.nonce);
         if (ws.readyState === WebSocket.OPEN) {
           if (fairResponse) {
-            try { ws.send(JSON.stringify(fairResponse)); } catch {}
+            try {
+              ws.send(JSON.stringify(fairResponse));
+            } catch {}
+            eventsCounter.inc({ direction: 'outgoing', event: 'fair' });
           } else {
-            try { ws.send(JSON.stringify({ t: 'error', message: 'fair_not_found' })); } catch {}
+            try {
+              ws.send(JSON.stringify({ t: 'error', message: 'fair_not_found' }));
+            } catch {}
+            eventsCounter.inc({ direction: 'outgoing', event: 'error' });
           }
         }
       }
@@ -699,6 +804,7 @@ wss.on('connection', (ws, request) => {
         try {
           ws.send(JSON.stringify({ t: 'error', message: (e as Error).message }));
         } catch {}
+        eventsCounter.inc({ direction: 'outgoing', event: 'error' });
       }
     }
   });
@@ -726,4 +832,13 @@ export async function shutdown() {
       else resolve();
     });
   });
+  if (httpServer.listening) {
+    await new Promise<void>((resolve, reject) => {
+      httpServer.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  activeClientsGauge.set(0);
 }
