@@ -11,6 +11,7 @@
     "dev": "node --watch dist/server.js"
   },
   "dependencies": {
+    "decimal.js": "^10.6.0",
     "uuid": "^11.0.2",
     "ws": "^8.18.0",
     "zod": "^4.1.11"

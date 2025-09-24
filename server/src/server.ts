@@ -1,11 +1,34 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuid } from 'uuid';
-import { GameMode, ClientMsg, ServerMsg, Snapshot, Bet, CrashRound, DuelRound, Side } from './types.js';
+import {
+  GameMode,
+  ClientMsg,
+  ServerMsg,
+  Snapshot,
+  Bet,
+  CrashRound,
+  DuelRound,
+  Side,
+  BetSnapshot,
+  CrashRoundSnapshot,
+  DuelRoundSnapshot,
+  WalletSnapshot
+} from './types.js';
 import { newCrashRound, tickCrash, transitionCrash, addBetCrash, canBet as canBetCrash } from './game_crash_dual.js';
 import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 import { calculateDuelSettlement } from './duel_settlement.js';
 import { ClientMsgSchema } from './schema.js';
 import { randomSeed, roundCrash, roundDuel, sha256 } from './fair.js';
+import {
+  Amount,
+  JACKPOT_BPS,
+  RAKE_BPS,
+  amountToNumber,
+  applyBps,
+  multiplyAmount,
+  percentage,
+  sanitizePositiveAmount
+} from './money.js';
 
 const DEFAULT_PORT = 8081;
 const HEARTBEAT_INTERVAL_MS = 15000;
@@ -29,7 +52,7 @@ function resolvePort(raw: string | undefined, fallback: number): number {
 }
 
 const PORT = resolvePort(process.env.PORT, DEFAULT_PORT);
-const INITIAL_BANKROLL = 100000;
+const INITIAL_BANKROLL: Amount = 100000n;
 const DEFAULT_CLIENT_SEED = 'clash-dual-client';
 const HISTORY_LIMIT = 200;
 
@@ -54,16 +77,16 @@ interface DuelHistoryEntry {
 }
 
 let mode: GameMode = 'crash_dual';
-let bankroll = INITIAL_BANKROLL;
-let jackpot = 0;
+let bankroll: Amount = INITIAL_BANKROLL;
+let jackpot: Amount = 0n;
 let rtpAvg = 0;
 let rounds = 0;
 let rtpSum = 0;
 let rtpRounds = 0;
 let crashRounds = 0;
 let duelRounds = 0;
-let totalWageredAll = 0;
-let totalPayoutsAll = 0;
+let totalWageredAll: Amount = 0n;
+let totalPayoutsAll: Amount = 0n;
 
 const crashFairState = { serverSeed: randomSeed(), nonce: 0 };
 const duelFairState = { serverSeed: randomSeed(), nonce: 0 };
@@ -254,7 +277,7 @@ function makeDuelRound(): DuelRound {
 let crash = makeCrashRound();
 let duel = makeDuelRound();
 
-const wallets = new Map<string, number>();
+const wallets = new Map<string, Amount>();
 const sockets = new Map<string, WebSocket>();
 const heartbeatTimers = new Set<ReturnType<typeof setInterval>>();
 const rateLimitBuckets = new Map<string, number>();
@@ -272,24 +295,65 @@ function consumeRateLimitToken(key: string): boolean {
   return true;
 }
 
+function toBetSnapshot(bet: Bet): BetSnapshot {
+  const { amount, ...rest } = bet;
+  return { ...rest, amount: amountToNumber(amount) };
+}
+
+function toCrashSnapshot(round: CrashRound): CrashRoundSnapshot {
+  return {
+    id: round.id,
+    phase: round.phase,
+    startedAt: round.startedAt,
+    endsAt: round.endsAt,
+    targetA: round.targetA,
+    targetB: round.targetB,
+    mA: round.mA,
+    mB: round.mB,
+    betsA: round.betsA.map(toBetSnapshot),
+    betsB: round.betsB.map(toBetSnapshot),
+    burned: amountToNumber(round.burned),
+    payouts: amountToNumber(round.payouts),
+    fair: round.fair
+  };
+}
+
+function toDuelSnapshot(round: DuelRound): DuelRoundSnapshot {
+  return {
+    id: round.id,
+    phase: round.phase,
+    startedAt: round.startedAt,
+    endsAt: round.endsAt,
+    micro: round.micro,
+    bets: round.bets.map(toBetSnapshot),
+    winner: round.winner,
+    runtimeExtraMs: round.runtimeExtraMs,
+    fair: round.fair
+  };
+}
+
+function toWalletSnapshot(balance: Amount): WalletSnapshot {
+  return { balance: amountToNumber(balance) };
+}
+
 function snapshot(): Snapshot {
   const operatorProfit = totalWageredAll - totalPayoutsAll;
-  const operatorEdge = totalWageredAll > 0 ? (operatorProfit / totalWageredAll) * 100 : 0;
+  const operatorEdge = totalWageredAll > 0n ? percentage(operatorProfit, totalWageredAll) : 0;
   return {
     mode,
-    crash,
-    duel,
-    bankroll,
-    jackpot,
+    crash: toCrashSnapshot(crash),
+    duel: toDuelSnapshot(duel),
+    bankroll: amountToNumber(bankroll),
+    jackpot: amountToNumber(jackpot),
     rtpAvg,
     rounds,
     stats: {
       totalRounds: rounds,
       crashRounds,
       duelRounds,
-      totalWagered: totalWageredAll,
-      totalPayouts: totalPayoutsAll,
-      operatorProfit,
+      totalWagered: amountToNumber(totalWageredAll),
+      totalPayouts: amountToNumber(totalPayoutsAll),
+      operatorProfit: amountToNumber(operatorProfit),
       operatorEdge,
       operatorEdgeTarget: 4
     }
@@ -298,9 +362,10 @@ function snapshot(): Snapshot {
 
 function hello(ws: WebSocket, uid?: string): string {
   const id = uid ?? uuid();
-  if (!wallets.has(id)) wallets.set(id, 1000);
+  if (!wallets.has(id)) wallets.set(id, 1000n);
   sockets.set(id, ws);
-  const msg: ServerMsg = { t: 'hello', uid: id, wallet: { balance: wallets.get(id)! }, snapshot: snapshot() };
+  const balance = wallets.get(id)!;
+  const msg: ServerMsg = { t: 'hello', uid: id, wallet: toWalletSnapshot(balance), snapshot: snapshot() };
   ws.send(JSON.stringify(msg));
   return id;
 }
@@ -319,11 +384,11 @@ function sendTo(uid: string, msg: ServerMsg) {
   try { ws.send(JSON.stringify(msg)); } catch {}
 }
 
-function pay(uid: string, delta: number) {
-  const cur = wallets.get(uid) ?? 0;
+function pay(uid: string, delta: Amount) {
+  const cur = wallets.get(uid) ?? 0n;
   const balance = cur + delta;
   wallets.set(uid, balance);
-  sendTo(uid, { t: 'wallet', wallet: { balance } });
+  sendTo(uid, { t: 'wallet', wallet: toWalletSnapshot(balance) });
 }
 
 function tryCashoutCrash(uid: string) {
@@ -334,9 +399,10 @@ function tryCashoutCrash(uid: string) {
     for (const b of list) {
       if (b.uid === uid && !b.cashedOut) {
         b.cashedOut = true;
-        b.cashoutAt = list === crash.betsA ? mA : mB;
-        const win = b.amount * b.cashoutAt;
-        const rake = win * 0.02;
+        const multiplier = list === crash.betsA ? mA : mB;
+        b.cashoutAt = multiplier;
+        const win = multiplyAmount(b.amount, multiplier);
+        const rake = applyBps(win, RAKE_BPS);
         pay(uid, win - rake);
         done = true;
       }
@@ -347,8 +413,8 @@ function tryCashoutCrash(uid: string) {
 
 type BetPlacementResult = { success: true } | { success: false; error?: 'duplicate_bet' };
 
-function placeBet(uid: string, amount: number, betId: string, side?: 'A' | 'B'): BetPlacementResult {
-  if ((wallets.get(uid) ?? 0) < amount) return { success: false };
+function placeBet(uid: string, amount: Amount, betId: string, side?: 'A' | 'B'): BetPlacementResult {
+  if ((wallets.get(uid) ?? 0n) < amount) return { success: false };
 
   if (mode === 'crash_dual') {
     if (!canBetCrash(crash)) return { success: false };
@@ -384,27 +450,28 @@ const loop = setInterval(() => {
     if (crash.phase === 'intermission') {
       const endA = crash.targetA;
       const endB = crash.targetB;
-      let burned = 0, payouts = 0;
-      for (const [list, final] of [[crash.betsA, endA],[crash.betsB, endB]] as const) {
+      let burned: Amount = 0n;
+      let payouts: Amount = 0n;
+      for (const [list, final] of [[crash.betsA, endA], [crash.betsB, endB]] as const) {
         for (const b of list) {
           if (b.cashedOut && b.cashoutAt && b.cashoutAt < final) {
-            const win = b.amount * b.cashoutAt;
-            const rake = win * 0.02;
+            const win = multiplyAmount(b.amount, b.cashoutAt);
+            const rake = applyBps(win, RAKE_BPS);
             payouts += win - rake;
           } else {
             burned += b.amount;
           }
         }
       }
-      const roundWagered =
-        crash.betsA.reduce((sum, bet) => sum + bet.amount, 0) +
-        crash.betsB.reduce((sum, bet) => sum + bet.amount, 0);
+      const wageredA = crash.betsA.reduce<Amount>((sum, bet) => sum + bet.amount, 0n);
+      const wageredB = crash.betsB.reduce<Amount>((sum, bet) => sum + bet.amount, 0n);
+      const roundWagered = wageredA + wageredB;
       crash.burned = burned;
       crash.payouts = payouts;
       bankroll += roundWagered - payouts;
-      jackpot += Math.max(0, burned * 0.01);
-      const roundRtp = roundWagered > 0 ? (payouts / roundWagered) * 100 : 0;
-      if (roundWagered > 0) {
+      jackpot += applyBps(burned, JACKPOT_BPS);
+      const roundRtp = roundWagered > 0n ? percentage(payouts, roundWagered) : 0;
+      if (roundWagered > 0n) {
         rtpSum += roundRtp;
         rtpRounds += 1;
         rtpAvg = rtpSum / rtpRounds;
@@ -436,9 +503,9 @@ const loop = setInterval(() => {
         pay(uid, amount);
       }
       bankroll += burned - roundPayouts;
-      jackpot += burned * 0.01;
-      const roundRtp = burned > 0 ? (roundPayouts / burned) * 100 : 0;
-      if (burned > 0) {
+      jackpot += applyBps(burned, JACKPOT_BPS);
+      const roundRtp = burned > 0n ? percentage(roundPayouts, burned) : 0;
+      if (burned > 0n) {
         rtpSum += roundRtp;
         rtpRounds += 1;
         rtpAvg = rtpSum / rtpRounds;
@@ -596,7 +663,9 @@ wss.on('connection', (ws, request) => {
         mode = msg.mode;
       } else if (msg.t === 'bet') {
         if (!uid) return;
-        const result = placeBet(uid, Math.max(1, Math.floor(msg.amount)), msg.betId, msg.side);
+        const normalized = sanitizePositiveAmount(msg.amount);
+        const wager = normalized > 0n ? normalized : 1n;
+        const result = placeBet(uid, wager, msg.betId, msg.side);
         if (!result.success && result.error) {
           sendTo(uid, { t: 'error', message: result.error });
         }
@@ -611,8 +680,8 @@ wss.on('connection', (ws, request) => {
         }
       } else if (msg.t === 'topup') {
         if (!uid) return;
-        const amount = Math.max(1, Math.floor(Number(msg.amount ?? 0)));
-        if (amount > 0) {
+        const amount = sanitizePositiveAmount(Number(msg.amount ?? 0));
+        if (amount > 0n) {
           pay(uid, amount);
         }
       } else if (msg.t === 'fair') {
