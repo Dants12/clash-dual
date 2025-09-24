@@ -19,7 +19,8 @@ export const SwitchModeSchema = z.object({
 export const BetSchema = z.object({
   t: z.literal('bet'),
   amount: z.number().finite().positive(),
-  side: SideSchema.optional()
+  side: SideSchema.optional(),
+  betId: z.string().min(1)
 });
 
 export const CashoutSchema = z.object({

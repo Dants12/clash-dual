@@ -75,13 +75,13 @@ test('rejects duel bets without a side without charging the wallet', async (t) =
   ws.send(JSON.stringify({ t: 'switch_mode', mode: 'duel_ab' }));
   await messages.waitFor((msg) => msg.t === 'snapshot' && msg.snapshot.mode === 'duel_ab');
 
-  ws.send(JSON.stringify({ t: 'bet', amount: 100 }));
+  ws.send(JSON.stringify({ t: 'bet', amount: 100, betId: 'bet-duel-1' }));
   await assert.rejects(
     messages.waitFor((msg) => msg.t === 'wallet', 1000),
     /Timed out/
   );
 
-  ws.send(JSON.stringify({ t: 'bet', amount: 100, side: 'A' }));
+  ws.send(JSON.stringify({ t: 'bet', amount: 100, side: 'A', betId: 'bet-duel-2' }));
   const walletUpdate = await messages.waitFor((msg) => msg.t === 'wallet');
   assert.equal(walletUpdate.wallet.balance, hello.wallet.balance - 100);
 

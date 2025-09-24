@@ -119,20 +119,33 @@ function tryCashoutCrash(uid: string) {
   return done;
 }
 
-function placeBet(uid: string, amount: number, side?: 'A'|'B') {
-  if ((wallets.get(uid) ?? 0) < amount) return false;
+type BetPlacementResult = { success: true } | { success: false; error?: 'duplicate_bet' };
+
+function placeBet(uid: string, amount: number, betId: string, side?: 'A' | 'B'): BetPlacementResult {
+  if ((wallets.get(uid) ?? 0) < amount) return { success: false };
 
   if (mode === 'crash_dual') {
-    if (!canBetCrash(crash)) return false;
-    const bet: Bet = { uid, amount };
+    if (!canBetCrash(crash)) return { success: false };
+    if (crash.seenBetIds.has(betId)) {
+      return { success: false, error: 'duplicate_bet' };
+    }
+    const bet: Bet = { id: betId, uid, amount };
+    if (!addBetCrash(crash, side ?? 'A', bet)) {
+      return { success: false, error: 'duplicate_bet' };
+    }
     pay(uid, -amount);
-    addBetCrash(crash, side ?? 'A', bet);
-    return true;
+    return { success: true };
   } else {
-    if (duel.phase !== 'betting' || !side) return false;
+    if (duel.phase !== 'betting' || !side) return { success: false };
+    if (duel.seenBetIds.has(betId)) {
+      return { success: false, error: 'duplicate_bet' };
+    }
+    const bet: Bet = { id: betId, uid, amount, side };
+    if (!addBetDuel(duel, side, bet)) {
+      return { success: false, error: 'duplicate_bet' };
+    }
     pay(uid, -amount);
-    addBetDuel(duel, side, { uid, amount, side });
-    return true;
+    return { success: true };
   }
 }
 
@@ -319,7 +332,10 @@ wss.on('connection', (ws, request) => {
         mode = msg.mode;
       } else if (msg.t === 'bet') {
         if (!uid) return;
-        placeBet(uid, Math.max(1, Math.floor(msg.amount)), msg.side);
+        const result = placeBet(uid, Math.max(1, Math.floor(msg.amount)), msg.betId, msg.side);
+        if (!result.success && result.error) {
+          sendTo(uid, { t: 'error', message: result.error });
+        }
       } else if (msg.t === 'cashout') {
         if (!uid) return;
         tryCashoutCrash(uid);
