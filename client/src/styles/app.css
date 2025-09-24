@@ -1285,8 +1285,7 @@ input[type='range'] {
 
   .column-right {
     grid-column: 3;
-/*main
-  }*/
+  }
 }
 
 @media (max-width: 1040px) {
@@ -1301,19 +1300,13 @@ input[type='range'] {
     gap: var(--gap-md);
   }
 
-  .column-center {
-    grid-column: 2;
-    max-width: none;
-  }
-
- main
   .column-left {
     grid-column: 1;
   }
 
-
-  .column-right {
-    grid-column: 3;
+  .column-center {
+    grid-column: 2;
+    max-width: none;
   }
 
   .app-header {
@@ -1321,7 +1314,6 @@ input[type='range'] {
     position: static;
     padding-inline: clamp(22px, 6vw, 36px);
     row-gap: clamp(16px, 3vw, 24px);
-/* main*/
   }
 
   .column-right {
@@ -1355,7 +1347,6 @@ input[type='range'] {
     --column-center: clamp(360px, 88vw, 520px);
     grid-template-columns: minmax(0, 1fr);
     gap: var(--gap-md);
-/*main*/
   }
 
   .column-left,
