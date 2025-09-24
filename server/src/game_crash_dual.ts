@@ -17,7 +17,8 @@ export function newCrashRound(): CrashRound {
     betsA: [],
     betsB: [],
     burned: 0,
-    payouts: 0
+    payouts: 0,
+    seenBetIds: new Set()
   };
 }
 
@@ -50,6 +51,11 @@ export function transitionCrash(r: CrashRound) {
 export function canBet(r: CrashRound) { return r.phase === 'betting'; }
 export function canCashout(r: CrashRound) { return r.phase === 'running'; }
 
-export function addBetCrash(r: CrashRound, side: 'A'|'B', bet: Bet) {
+export function addBetCrash(r: CrashRound, side: 'A' | 'B', bet: Bet): boolean {
+  if (r.seenBetIds.has(bet.id)) {
+    return false;
+  }
+  r.seenBetIds.add(bet.id);
   (side === 'A' ? r.betsA : r.betsB).push(bet);
+  return true;
 }

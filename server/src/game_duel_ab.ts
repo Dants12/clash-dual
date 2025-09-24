@@ -10,7 +10,8 @@ export function newDuelRound(): DuelRound {
     startedAt: start,
     endsAt: start + 5000,
     micro: { A: { speed: 0, defense: 0 }, B: { speed: 0, defense: 0 } },
-    bets: []
+    bets: [],
+    seenBetIds: new Set()
   };
 }
 
@@ -39,7 +40,12 @@ export function transitionDuel(r: DuelRound) {
   }
 }
 
-export function addBetDuel(r: DuelRound, side: Side, bet: Bet) {
+export function addBetDuel(r: DuelRound, side: Side, bet: Bet): boolean {
+  if (r.seenBetIds.has(bet.id)) {
+    return false;
+  }
+  r.seenBetIds.add(bet.id);
   bet.side = side;
   r.bets.push(bet);
+  return true;
 }

@@ -5,6 +5,7 @@ export interface ClientAuth { uid: string; }
 export interface Wallet { balance: number; }
 
 export interface Bet {
+  id: string;
   uid: string;
   amount: number;
   side?: Side;
@@ -25,6 +26,7 @@ export interface CrashRound {
   betsB: Bet[];
   burned: number;
   payouts: number;
+  seenBetIds: Set<string>;
 }
 
 export interface DuelRound {
@@ -35,6 +37,7 @@ export interface DuelRound {
   micro: { A: { speed: number; defense: number }, B: { speed: number; defense: number } };
   bets: Bet[];
   winner?: Side;
+  seenBetIds: Set<string>;
 }
 
 export interface RoundStats {
@@ -62,7 +65,7 @@ export interface Snapshot {
 export type ClientMsg =
   | { t: 'auth'; uid?: string }
   | { t: 'switch_mode'; mode: GameMode }
-  | { t: 'bet'; amount: number; side?: Side }
+  | { t: 'bet'; amount: number; side?: Side; betId: string }
   | { t: 'cashout' }
   | { t: 'micro'; what: 'speed' | 'defense'; side: Side; value: number }
   | { t: 'topup'; amount: number }
