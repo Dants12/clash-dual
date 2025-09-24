@@ -13,4 +13,5 @@
 npm run dev      # start Vite dev server
 npm run build    # type-check and build for production
 npm run preview  # locally preview the production build
+npm run lint     # run ESLint with the shared configuration
 ```

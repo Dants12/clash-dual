@@ -54,7 +54,7 @@ export interface BaseFairInfo {
   serverSeed?: string;
 }
 
-export interface CrashFairInfo extends BaseFairInfo {}
+export type CrashFairInfo = BaseFairInfo;
 
 export interface DuelFairInfo extends BaseFairInfo {
   roll?: number;

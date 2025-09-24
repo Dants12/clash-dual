@@ -7,7 +7,10 @@
     "esModuleInterop": true,
     "outDir": "dist",
     "rootDir": "src",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true
   },
   "include": ["src"]
 }
