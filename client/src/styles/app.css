@@ -388,22 +388,25 @@ body::before {
 }
 
 .app-main {
+  --layout-max-width: 1640px;
+  --layout-gutter: clamp(28px, 5vw, 48px);
+  --layout-column-gap: clamp(24px, 4vw, 36px);
   flex: 1;
   width: 100%;
-  padding: clamp(32px, 6vw, 64px) 0 clamp(52px, 8vw, 96px);
+  padding: clamp(40px, 6vw, 80px) 0 clamp(64px, 8vw, 108px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(28px, 4vw, 42px);
+  gap: clamp(32px, 5vw, 48px);
 }
 
 .app-main__intro {
-  width: min(1180px, 100%);
-  margin-inline: clamp(28px, 6vw, 64px);
+  width: min(100%, var(--layout-max-width));
+  margin: 0 auto;
+  padding: clamp(24px, 3vw, 36px);
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.7fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.45fr);
   gap: clamp(18px, 3vw, 32px);
-  padding: clamp(22px, 3vw, 32px);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -462,17 +465,15 @@ body::before {
 }
 
 .layout {
-  --layout-hpad: clamp(28px, 6vw, 64px);
-  --layout-max: 1680px;
-  --column-side: clamp(300px, 26vw, 340px);
-  --column-center: clamp(540px, 48vw, 720px);
-  width: min(var(--layout-max), 100%);
-  padding-inline: var(--layout-hpad);
-  padding-bottom: 18px;
+  width: min(100%, var(--layout-max-width));
+  margin: 0 auto;
+  padding: 0 var(--layout-gutter) 18px;
   display: grid;
-  grid-template-columns: minmax(0, var(--column-side)) minmax(0, 1fr)
-    minmax(0, var(--column-side));
-  gap: var(--gap-lg);
+  grid-template-columns:
+    minmax(260px, clamp(300px, 22vw, 360px))
+    minmax(520px, 1fr)
+    minmax(260px, clamp(300px, 22vw, 360px));
+  gap: var(--layout-column-gap);
   align-items: start;
   scrollbar-width: thin;
   scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
@@ -1240,9 +1241,29 @@ input[type='range'] {
   font-weight: 600;
 }
 
-@media (max-width: 1320px) {
+@media (max-width: 1400px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.9fr);
+    padding-inline: clamp(32px, 6vw, 48px);
+  }
+
+  .app-main__intro {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .layout {
+    grid-template-columns:
+      minmax(240px, clamp(280px, 28vw, 320px))
+      minmax(460px, 1fr)
+      minmax(240px, clamp(280px, 28vw, 320px));
+    gap: clamp(22px, 4vw, 32px);
+  }
+}
+
+@media (max-width: 1180px) {
   .app-header {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: clamp(16px, 3vw, 24px);
   }
 
   .app-header__controls {
@@ -1251,10 +1272,6 @@ input[type='range'] {
 
   .app-header__controls .segmented {
     justify-content: flex-start;
-  }
-
-  .app-main__intro {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .layout {
@@ -1268,11 +1285,13 @@ input[type='range'] {
 
   .column-right {
     grid-column: 3;
+main
   }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1040px) {
   .layout {
+
     --layout-max: 100%;
     --layout-hpad: clamp(22px, 7vw, 38px);
     --column-side: clamp(220px, 34vw, 280px);
@@ -1287,9 +1306,11 @@ input[type='range'] {
     max-width: none;
   }
 
+ main
   .column-left {
     grid-column: 1;
   }
+
 
   .column-right {
     grid-column: 3;
@@ -1300,14 +1321,15 @@ input[type='range'] {
     position: static;
     padding-inline: clamp(22px, 6vw, 36px);
     row-gap: clamp(16px, 3vw, 24px);
+ main
   }
 
-  .app-main {
-    padding-block: clamp(26px, 7vw, 52px);
+  .column-right {
+    grid-column: 1 / -1;
   }
 
   .app-main__intro {
-    margin-inline: clamp(22px, 6vw, 36px);
+    margin-inline: clamp(22px, 7vw, 36px);
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1325,13 +1347,15 @@ input[type='range'] {
   }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 780px) {
   .layout {
+
     --layout-hpad: clamp(18px, 8vw, 28px);
     --column-side: clamp(240px, 76vw, 320px);
     --column-center: clamp(360px, 88vw, 520px);
     grid-template-columns: minmax(0, 1fr);
     gap: var(--gap-md);
+main
   }
 
   .column-left,
@@ -1346,19 +1370,11 @@ input[type='range'] {
 }
 
 @media (max-width: 640px) {
-  .layout {
-    --layout-hpad: 18px;
-    --column-side: min(100%, 360px);
-    --column-center: min(100%, 520px);
-    gap: var(--gap-md);
-  }
-
   .app-main {
-    padding-block: 24px 36px;
+    padding-block: 28px 40px;
   }
 
   .app-main__intro {
-    margin-inline: 18px;
     padding: 20px;
     gap: var(--gap-md);
   }
@@ -1368,6 +1384,7 @@ input[type='range'] {
   }
 
   .app-header {
+    grid-template-columns: minmax(0, 1fr);
     padding-inline: 18px;
   }
 
