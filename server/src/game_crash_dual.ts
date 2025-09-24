@@ -1,24 +1,31 @@
-import { CrashRound, Bet } from './types.js';
+import { CrashRound, Bet, CrashFairInfo } from './types.js';
 import { now } from './utils.js';
 import { smoothMultiplier, jumpyMultiplier } from './math.js';
 import { v4 as uuid } from 'uuid';
 
-export function newCrashRound(): CrashRound {
+export interface CrashRoundInit {
+  targetA: number;
+  targetB: number;
+  fair: CrashFairInfo;
+}
+
+export function newCrashRound(init: CrashRoundInit): CrashRound {
   const start = now();
   return {
     id: uuid(),
     phase: 'betting',
     startedAt: start,
     endsAt: start + 4000,
-    targetA: 1.2 + Math.random() * 9.8,
-    targetB: 1.1 + Math.random() * 14.9,
+    targetA: init.targetA,
+    targetB: init.targetB,
     mA: 1,
     mB: 1,
     betsA: [],
     betsB: [],
     burned: 0,
     payouts: 0,
-    seenBetIds: new Set()
+    seenBetIds: new Set(),
+    fair: { ...init.fair }
   };
 }
 

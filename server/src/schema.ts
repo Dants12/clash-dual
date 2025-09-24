@@ -43,6 +43,12 @@ export const PingSchema = z.object({
   t: z.literal('ping')
 });
 
+export const FairSchema = z.object({
+  t: z.literal('fair'),
+  mode: GameModeSchema,
+  nonce: z.number().int().nonnegative().optional()
+});
+
 export const ClientMsgSchema = z.discriminatedUnion('t', [
   AuthSchema,
   SwitchModeSchema,
@@ -50,7 +56,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   CashoutSchema,
   MicroSchema,
   TopupSchema,
-  PingSchema
+  PingSchema,
+  FairSchema
 ]);
 
 type AssertSide = z.infer<typeof SideSchema> extends Side ? true : never;
