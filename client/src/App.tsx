@@ -42,6 +42,20 @@ const QUICK_TOPUPS = [500, 1_000, 2_500, 5_000, 10_000, 25_000];
 const BET_PRESETS = [500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000];
 const THEME_STORAGE_KEY = 'clash-dual-theme';
 
+const generateBetId = () => {
+  const globalCrypto = typeof globalThis !== 'undefined' ? (globalThis as { crypto?: Crypto }).crypto : undefined;
+  if (globalCrypto?.randomUUID) {
+    try {
+      return globalCrypto.randomUUID();
+    } catch {
+      // ignore and fall back to timestamp-based id
+    }
+  }
+  const timestamp = Date.now().toString(16);
+  const random = Math.random().toString(16).slice(2);
+  return `bet-${timestamp}-${random}`;
+};
+
 export default function App() {
   const [ws, setWS] = useState<WebSocket | null>(null);
   const uid = useRef<string>('');
@@ -70,6 +84,13 @@ export default function App() {
     return initial;
   });
   const commit = (import.meta.env.VITE_COMMIT as string | undefined) || 'local';
+  const lastBet = useRef<{
+    amount: number;
+    side: Side;
+    mode: GameMode;
+    roundId: string | null;
+    betId: string;
+  } | null>(null);
 
   const pushEvent = useCallback((text: string) => {
     setEvents((prev) => [{ id: eventId(), text, ts: Date.now() }, ...prev].slice(0, 30));
@@ -202,6 +223,18 @@ export default function App() {
     setTargetInputs({ A: crashRound.targetA.toFixed(2), B: crashRound.targetB.toFixed(2) });
     setTargetRoundId(crashRound.id);
   }, [crashRound, mode, targetRoundId]);
+
+  useEffect(() => {
+    const roundId = mode === 'crash_dual' ? crashRound?.id ?? null : duelRound?.id ?? null;
+    const phase = mode === 'crash_dual' ? crashRound?.phase : duelRound?.phase;
+    if (phase !== 'betting') {
+      lastBet.current = null;
+      return;
+    }
+    if (lastBet.current && (lastBet.current.mode !== mode || lastBet.current.roundId !== roundId)) {
+      lastBet.current = null;
+    }
+  }, [crashRound?.id, crashRound?.phase, duelRound?.id, duelRound?.phase, mode]);
 
   const targetPlans = useMemo<Record<Side, number | null>>(() => {
     const parse = (value: string) => {
@@ -343,12 +376,36 @@ export default function App() {
     const value = sanitizedAmount;
     const phaseOk = (mode === 'crash_dual' && crashRound?.phase === 'betting') || (mode === 'duel_ab' && duelRound?.phase === 'betting');
     if (!isLive || !phaseOk || value <= 0 || value > wallet) return;
-    const payload = { t: 'bet', amount: Math.max(1, Math.round(value)), side };
+    const roundId = mode === 'crash_dual' ? crashRound?.id ?? null : duelRound?.id ?? null;
+    const amountToSend = Math.max(1, Math.round(value));
+    const previous = lastBet.current;
+    const shouldReuseBetId =
+      !!previous &&
+      previous.amount === amountToSend &&
+      previous.side === side &&
+      previous.mode === mode &&
+      previous.roundId === roundId;
+    const betId = shouldReuseBetId ? previous.betId : generateBetId();
+    const payload = { t: 'bet', amount: amountToSend, side, betId };
     send(payload);
+    lastBet.current = { amount: amountToSend, side, mode, roundId, betId };
     const plannedTarget = targetPlans[side];
     const planSuffix = mode === 'crash_dual' && plannedTarget != null ? ` (target ${formatMultiplier(plannedTarget)})` : '';
     pushEvent(`Bet placed · ${formatCents(payload.amount)} on side ${side}${planSuffix}`);
-  }, [crashRound?.phase, duelRound?.phase, isLive, mode, pushEvent, sanitizedAmount, send, side, targetPlans, wallet]);
+  }, [
+    crashRound?.id,
+    crashRound?.phase,
+    duelRound?.id,
+    duelRound?.phase,
+    isLive,
+    mode,
+    pushEvent,
+    sanitizedAmount,
+    send,
+    side,
+    targetPlans,
+    wallet
+  ]);
 
   const cashout = useCallback(() => {
     if (!isLive || mode !== 'crash_dual' || crashRound?.phase !== 'running') return;
