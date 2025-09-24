@@ -45,18 +45,36 @@ for i in {1..40}; do
   fi
 done
 GIT_SHA=$(git rev-parse --short HEAD)
-export VITE_COMMIT=$GIT_SHA
+export VITE_COMMIT="$GIT_SHA"
 # --- фронт (без sudo; сделай владельцем каталог один раз: sudo chown -R $USER:$USER /var/www/clashdual)
 if [ -f "$CLI_DIR/package.json" ]; then
   log "Client build..."
-  GIT_SHA=$(git rev-parse --short HEAD)
-  export VITE_COMMIT="$GIT_SHA"
-
   cd "$CLI_DIR"
   npm ci || npm i
   npm run build
   mkdir -p "$WEB_DIR"
   rsync -a --delete "$CLI_DIR/dist/" "$WEB_DIR/"
   log "Client synced -> $WEB_DIR"
+
+  local_index="$CLI_DIR/dist/index.html"
+  if [ -f "$local_index" ]; then
+    local_md5=$(md5sum "$local_index" | awk '{print $1}')
+  else
+    local_md5="missing"
+  fi
+
+  remote_html=$(curl -s http://127.0.0.1/)
+  remote_md5=$(printf '%s' "$remote_html" | md5sum | awk '{print $1}')
+  remote_title=$(printf '%s' "$remote_html" | python3 - <<'PY'
+import re
+import sys
+
+html = sys.stdin.read()
+match = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+if match:
+    print(match.group(1).strip(), end="")
+PY
+  )
+  log "Client checksum: local dist/index.html md5=$local_md5, remote http://127.0.0.1/ md5=$remote_md5, title=\"$remote_title\""
 fi
 log "Done."
