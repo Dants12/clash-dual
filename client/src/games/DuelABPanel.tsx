@@ -1,4 +1,3 @@
-import React from 'react';
 import { Badge, type BadgeTone } from '../ui/Badge';
 import { MetricRow } from '../ui/MetricRow';
 
