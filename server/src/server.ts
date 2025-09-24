@@ -102,7 +102,7 @@ let totalPayoutsAll: Amount = 0n;
 
 const crashFairState = { serverSeed: randomSeed(), nonce: 0 };
 const duelFairState = { serverSeed: randomSeed(), nonce: 0 };
-let clientSeed = DEFAULT_CLIENT_SEED;
+const clientSeed = DEFAULT_CLIENT_SEED;
 
 const crashHistory = new Map<number, CrashHistoryEntry>();
 const duelHistory = new Map<number, DuelHistoryEntry>();

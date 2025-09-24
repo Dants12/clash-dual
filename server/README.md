@@ -33,3 +33,4 @@ curl -sf http://127.0.0.1:8081/metrics | head
 ## Development
 
 - Run `npm test` to compile the TypeScript sources (creating `dist/`) and execute the Node test suite in `test/*.test.js`.
+- Run `npm run lint` to statically analyze the TypeScript sources with the shared ESLint configuration.
