@@ -7,7 +7,14 @@ import WebSocket from 'ws';
 
 import { newCrashRound, addBetCrash } from '../src/game_crash_dual.js';
 import { newDuelRound, addBetDuel } from '../src/game_duel_ab.js';
-import type { Bet, CrashRound, DuelRound, ServerMsg } from '../src/types.js';
+import type {
+  Bet,
+  CrashRound,
+  DuelRound,
+  CrashRoundSnapshot,
+  DuelRoundSnapshot,
+  ServerMsg
+} from '../src/types.js';
 
 const PORT = 19085;
 
@@ -72,12 +79,12 @@ function createMessageQueue(ws: WebSocket) {
   return { waitFor, pull };
 }
 
-function crashBetCount(round: CrashRound | undefined, uid: string) {
+function crashBetCount(round: CrashRoundSnapshot | undefined, uid: string) {
   if (!round) return 0;
   return round.betsA.filter((bet) => bet.uid === uid).length + round.betsB.filter((bet) => bet.uid === uid).length;
 }
 
-function duelBetCount(round: DuelRound | undefined, uid: string) {
+function duelBetCount(round: DuelRoundSnapshot | undefined, uid: string) {
   if (!round) return 0;
   return round.bets.filter((bet) => bet.uid === uid).length;
 }
@@ -100,7 +107,7 @@ function simpleDuelRound(nonce: number) {
 
 test('game rounds keep seen bet ids per round', () => {
   const crash = simpleCrashRound(0);
-  const betCrash: Bet = { id: 'bet-crash', uid: 'u1', amount: 10 };
+  const betCrash: Bet = { id: 'bet-crash', uid: 'u1', amount: 10n };
   assert.equal(addBetCrash(crash, 'A', betCrash), true);
   assert.equal(addBetCrash(crash, 'A', { ...betCrash }), false);
   assert.equal(crash.betsA.length, 1);
@@ -109,7 +116,7 @@ test('game rounds keep seen bet ids per round', () => {
   assert.equal(addBetCrash(nextCrash, 'B', { ...betCrash, side: 'B' }), true);
 
   const duel = simpleDuelRound(0);
-  const duelBet: Bet = { id: 'bet-duel', uid: 'u2', amount: 15, side: 'A' };
+  const duelBet: Bet = { id: 'bet-duel', uid: 'u2', amount: 15n, side: 'A' };
   assert.equal(addBetDuel(duel, 'A', duelBet), true);
   assert.equal(addBetDuel(duel, 'A', { ...duelBet }), false);
   assert.equal(duel.bets.length, 1);

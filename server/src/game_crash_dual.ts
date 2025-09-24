@@ -22,8 +22,8 @@ export function newCrashRound(init: CrashRoundInit): CrashRound {
     mB: 1,
     betsA: [],
     betsB: [],
-    burned: 0,
-    payouts: 0,
+    burned: 0n,
+    payouts: 0n,
     seenBetIds: new Set(),
     fair: { ...init.fair }
   };
