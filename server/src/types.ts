@@ -27,6 +27,7 @@ export interface CrashRound {
   burned: number;
   payouts: number;
   seenBetIds: Set<string>;
+  fair: CrashFairInfo;
 }
 
 export interface DuelRound {
@@ -38,6 +39,23 @@ export interface DuelRound {
   bets: Bet[];
   winner?: Side;
   seenBetIds: Set<string>;
+  runtimeExtraMs: number;
+  fair: DuelFairInfo;
+}
+
+export interface BaseFairInfo {
+  serverSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+  serverSeed?: string;
+}
+
+export interface CrashFairInfo extends BaseFairInfo {}
+
+export interface DuelFairInfo extends BaseFairInfo {
+  roll?: number;
+  pA?: number;
+  pB?: number;
 }
 
 export interface RoundStats {
@@ -69,11 +87,35 @@ export type ClientMsg =
   | { t: 'cashout' }
   | { t: 'micro'; what: 'speed' | 'defense'; side: Side; value: number }
   | { t: 'topup'; amount: number }
-  | { t: 'ping' };
+  | { t: 'ping' }
+  | { t: 'fair'; mode: GameMode; nonce?: number };
 
 export type ServerMsg =
   | { t: 'hello'; uid: string; wallet: Wallet; snapshot: Snapshot }
   | { t: 'wallet'; wallet: Wallet }
   | { t: 'snapshot'; snapshot: Snapshot }
   | { t: 'event'; kind: string; payload?: any }
-  | { t: 'error'; message: string };
+  | { t: 'error'; message: string }
+  | FairServerMsg;
+
+export type FairServerMsg =
+  | {
+      t: 'fair';
+      mode: 'crash_dual';
+      nonce: number;
+      roundId: string;
+      clientSeed: string;
+      serverSeedHash: string;
+      serverSeed?: string;
+      crash?: { targetA: number; targetB: number };
+    }
+  | {
+      t: 'fair';
+      mode: 'duel_ab';
+      nonce: number;
+      roundId: string;
+      clientSeed: string;
+      serverSeedHash: string;
+      serverSeed?: string;
+      duel?: { roll?: number; pA?: number; pB?: number; winner?: Side };
+    };

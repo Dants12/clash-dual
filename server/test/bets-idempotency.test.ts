@@ -82,23 +82,39 @@ function duelBetCount(round: DuelRound | undefined, uid: string) {
   return round.bets.filter((bet) => bet.uid === uid).length;
 }
 
+function simpleCrashRound(nonce: number) {
+  return newCrashRound({
+    targetA: 1.2 + nonce,
+    targetB: 1.5 + nonce,
+    fair: { clientSeed: 'test', serverSeedHash: `hash-${nonce}`, nonce }
+  });
+}
+
+function simpleDuelRound(nonce: number) {
+  return newDuelRound({
+    fair: { clientSeed: 'test', serverSeedHash: `hash-${nonce}`, nonce },
+    runtimeExtraMs: 0,
+    roll: 0.5
+  });
+}
+
 test('game rounds keep seen bet ids per round', () => {
-  const crash = newCrashRound();
+  const crash = simpleCrashRound(0);
   const betCrash: Bet = { id: 'bet-crash', uid: 'u1', amount: 10 };
   assert.equal(addBetCrash(crash, 'A', betCrash), true);
   assert.equal(addBetCrash(crash, 'A', { ...betCrash }), false);
   assert.equal(crash.betsA.length, 1);
 
-  const nextCrash = newCrashRound();
+  const nextCrash = simpleCrashRound(1);
   assert.equal(addBetCrash(nextCrash, 'B', { ...betCrash, side: 'B' }), true);
 
-  const duel = newDuelRound();
+  const duel = simpleDuelRound(0);
   const duelBet: Bet = { id: 'bet-duel', uid: 'u2', amount: 15, side: 'A' };
   assert.equal(addBetDuel(duel, 'A', duelBet), true);
   assert.equal(addBetDuel(duel, 'A', { ...duelBet }), false);
   assert.equal(duel.bets.length, 1);
 
-  const nextDuel = newDuelRound();
+  const nextDuel = simpleDuelRound(1);
   assert.equal(addBetDuel(nextDuel, 'A', { ...duelBet }), true);
 });
 

@@ -1,10 +1,11 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuid } from 'uuid';
-import { GameMode, ClientMsg, ServerMsg, Snapshot, Bet, CrashRound } from './types.js';
+import { GameMode, ClientMsg, ServerMsg, Snapshot, Bet, CrashRound, DuelRound, Side } from './types.js';
 import { newCrashRound, tickCrash, transitionCrash, addBetCrash, canBet as canBetCrash } from './game_crash_dual.js';
 import { newDuelRound, addBetDuel, transitionDuel } from './game_duel_ab.js';
 import { calculateDuelSettlement } from './duel_settlement.js';
 import { ClientMsgSchema } from './schema.js';
+import { randomSeed, roundCrash, roundDuel, sha256 } from './fair.js';
 
 const DEFAULT_PORT = 8081;
 const HEARTBEAT_INTERVAL_MS = 15000;
@@ -29,6 +30,28 @@ function resolvePort(raw: string | undefined, fallback: number): number {
 
 const PORT = resolvePort(process.env.PORT, DEFAULT_PORT);
 const INITIAL_BANKROLL = 100000;
+const DEFAULT_CLIENT_SEED = 'clash-dual-client';
+const HISTORY_LIMIT = 200;
+
+interface CrashHistoryEntry {
+  nonce: number;
+  roundId: string;
+  serverSeed: string;
+  serverSeedHash: string;
+  clientSeed: string;
+}
+
+interface DuelHistoryEntry {
+  nonce: number;
+  roundId: string;
+  serverSeed: string;
+  serverSeedHash: string;
+  clientSeed: string;
+  winner: Side;
+  roll: number;
+  pA: number;
+  pB: number;
+}
 
 let mode: GameMode = 'crash_dual';
 let bankroll = INITIAL_BANKROLL;
@@ -42,8 +65,194 @@ let duelRounds = 0;
 let totalWageredAll = 0;
 let totalPayoutsAll = 0;
 
-let crash = newCrashRound();
-let duel = newDuelRound();
+const crashFairState = { serverSeed: randomSeed(), nonce: 0 };
+const duelFairState = { serverSeed: randomSeed(), nonce: 0 };
+let clientSeed = DEFAULT_CLIENT_SEED;
+
+const crashHistory = new Map<number, CrashHistoryEntry>();
+const duelHistory = new Map<number, DuelHistoryEntry>();
+const crashHistoryOrder: number[] = [];
+const duelHistoryOrder: number[] = [];
+
+function storeCrashHistory(entry: CrashHistoryEntry) {
+  crashHistory.set(entry.nonce, entry);
+  crashHistoryOrder.push(entry.nonce);
+  if (crashHistoryOrder.length > HISTORY_LIMIT) {
+    const oldest = crashHistoryOrder.shift();
+    if (oldest !== undefined) {
+      crashHistory.delete(oldest);
+    }
+  }
+}
+
+function storeDuelHistory(entry: DuelHistoryEntry) {
+  duelHistory.set(entry.nonce, entry);
+  duelHistoryOrder.push(entry.nonce);
+  if (duelHistoryOrder.length > HISTORY_LIMIT) {
+    const oldest = duelHistoryOrder.shift();
+    if (oldest !== undefined) {
+      duelHistory.delete(oldest);
+    }
+  }
+}
+
+function latestCrashNonce(): number | undefined {
+  if (crashHistoryOrder.length > 0) {
+    return crashHistoryOrder[crashHistoryOrder.length - 1];
+  }
+  return undefined;
+}
+
+function latestDuelNonce(): number | undefined {
+  if (duelHistoryOrder.length > 0) {
+    return duelHistoryOrder[duelHistoryOrder.length - 1];
+  }
+  return undefined;
+}
+
+function buildCrashFairResponse(nonce?: number): ServerMsg | null {
+  let targetNonce = nonce;
+  if (targetNonce === undefined) {
+    targetNonce = latestCrashNonce();
+    if (targetNonce === undefined) {
+      targetNonce = crash.fair.nonce;
+    }
+  }
+  if (targetNonce === undefined) {
+    return null;
+  }
+  if (targetNonce === crash.fair.nonce) {
+    const base = {
+      t: 'fair' as const,
+      mode: 'crash_dual' as const,
+      nonce: crash.fair.nonce,
+      roundId: crash.id,
+      clientSeed: crash.fair.clientSeed,
+      serverSeedHash: crash.fair.serverSeedHash,
+      serverSeed: crash.fair.serverSeed
+    };
+    if (crash.fair.serverSeed) {
+      const { targetA, targetB } = roundCrash({
+        serverSeed: crash.fair.serverSeed,
+        clientSeed: crash.fair.clientSeed,
+        nonce: crash.fair.nonce
+      });
+      return { ...base, crash: { targetA, targetB } };
+    }
+    return base;
+  }
+  const entry = crashHistory.get(targetNonce);
+  if (!entry) {
+    return null;
+  }
+  const { targetA, targetB } = roundCrash({
+    serverSeed: entry.serverSeed,
+    clientSeed: entry.clientSeed,
+    nonce: entry.nonce
+  });
+  return {
+    t: 'fair',
+    mode: 'crash_dual',
+    nonce: entry.nonce,
+    roundId: entry.roundId,
+    clientSeed: entry.clientSeed,
+    serverSeedHash: entry.serverSeedHash,
+    serverSeed: entry.serverSeed,
+    crash: { targetA, targetB }
+  };
+}
+
+function buildDuelFairResponse(nonce?: number): ServerMsg | null {
+  let targetNonce = nonce;
+  if (targetNonce === undefined) {
+    targetNonce = latestDuelNonce();
+    if (targetNonce === undefined) {
+      targetNonce = duel.fair.nonce;
+    }
+  }
+  if (targetNonce === undefined) {
+    return null;
+  }
+  if (targetNonce === duel.fair.nonce) {
+    const base = {
+      t: 'fair' as const,
+      mode: 'duel_ab' as const,
+      nonce: duel.fair.nonce,
+      roundId: duel.id,
+      clientSeed: duel.fair.clientSeed,
+      serverSeedHash: duel.fair.serverSeedHash,
+      serverSeed: duel.fair.serverSeed
+    };
+    if (duel.fair.serverSeed && duel.winner) {
+      return {
+        ...base,
+        duel: {
+          roll: duel.fair.roll,
+          pA: duel.fair.pA,
+          pB: duel.fair.pB,
+          winner: duel.winner
+        }
+      };
+    }
+    return base;
+  }
+  const entry = duelHistory.get(targetNonce);
+  if (!entry) {
+    return null;
+  }
+  return {
+    t: 'fair',
+    mode: 'duel_ab',
+    nonce: entry.nonce,
+    roundId: entry.roundId,
+    clientSeed: entry.clientSeed,
+    serverSeedHash: entry.serverSeedHash,
+    serverSeed: entry.serverSeed,
+    duel: {
+      roll: entry.roll,
+      pA: entry.pA,
+      pB: entry.pB,
+      winner: entry.winner
+    }
+  };
+}
+
+function makeCrashRound(): CrashRound {
+  const { targetA, targetB } = roundCrash({
+    serverSeed: crashFairState.serverSeed,
+    clientSeed,
+    nonce: crashFairState.nonce
+  });
+  return newCrashRound({
+    targetA,
+    targetB,
+    fair: {
+      serverSeedHash: sha256(crashFairState.serverSeed),
+      clientSeed,
+      nonce: crashFairState.nonce
+    }
+  });
+}
+
+function makeDuelRound(): DuelRound {
+  const { durationExtraMs, roll } = roundDuel({
+    serverSeed: duelFairState.serverSeed,
+    clientSeed,
+    nonce: duelFairState.nonce
+  });
+  return newDuelRound({
+    fair: {
+      serverSeedHash: sha256(duelFairState.serverSeed),
+      clientSeed,
+      nonce: duelFairState.nonce
+    },
+    runtimeExtraMs: durationExtraMs,
+    roll
+  });
+}
+
+let crash = makeCrashRound();
+let duel = makeDuelRound();
 
 const wallets = new Map<string, number>();
 const sockets = new Map<string, WebSocket>();
@@ -204,10 +413,23 @@ const loop = setInterval(() => {
       crashRounds += 1;
       totalWageredAll += roundWagered;
       totalPayoutsAll += payouts;
-      nextCrash = newCrashRound();
+      crash.fair.serverSeed = crashFairState.serverSeed;
+      storeCrashHistory({
+        nonce: crash.fair.nonce,
+        roundId: crash.id,
+        serverSeed: crashFairState.serverSeed,
+        serverSeedHash: crash.fair.serverSeedHash,
+        clientSeed: crash.fair.clientSeed
+      });
+      crashFairState.nonce += 1;
+      crashFairState.serverSeed = randomSeed();
+      nextCrash = makeCrashRound();
     }
   } else {
     transitionDuel(duel);
+    if (duel.phase === 'resolve' && duel.fair.serverSeed === undefined) {
+      duel.fair.serverSeed = duelFairState.serverSeed;
+    }
     if (duel.phase === 'intermission') {
       const { burned, roundPayouts, payouts } = calculateDuelSettlement(duel.bets, duel.winner);
       for (const { uid, amount } of payouts) {
@@ -225,7 +447,25 @@ const loop = setInterval(() => {
       duelRounds += 1;
       totalWageredAll += burned;
       totalPayoutsAll += roundPayouts;
-      duel = newDuelRound();
+      if (duel.fair.serverSeed && duel.winner) {
+        const roll = duel.fair.roll ?? 0;
+        const pA = duel.fair.pA ?? 0;
+        const pB = duel.fair.pB ?? 0;
+        storeDuelHistory({
+          nonce: duel.fair.nonce,
+          roundId: duel.id,
+          serverSeed: duel.fair.serverSeed,
+          serverSeedHash: duel.fair.serverSeedHash,
+          clientSeed: duel.fair.clientSeed,
+          winner: duel.winner,
+          roll,
+          pA,
+          pB
+        });
+      }
+      duelFairState.nonce += 1;
+      duelFairState.serverSeed = randomSeed();
+      duel = makeDuelRound();
     }
   }
   broadcast({ t: 'snapshot', snapshot: snapshot() });
@@ -374,6 +614,15 @@ wss.on('connection', (ws, request) => {
         const amount = Math.max(1, Math.floor(Number(msg.amount ?? 0)));
         if (amount > 0) {
           pay(uid, amount);
+        }
+      } else if (msg.t === 'fair') {
+        const fairResponse = msg.mode === 'crash_dual' ? buildCrashFairResponse(msg.nonce) : buildDuelFairResponse(msg.nonce);
+        if (ws.readyState === WebSocket.OPEN) {
+          if (fairResponse) {
+            try { ws.send(JSON.stringify(fairResponse)); } catch {}
+          } else {
+            try { ws.send(JSON.stringify({ t: 'error', message: 'fair_not_found' })); } catch {}
+          }
         }
       }
     } catch (e) {
