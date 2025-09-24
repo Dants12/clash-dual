@@ -8,7 +8,10 @@ import { ClientMsgSchema } from './schema.js';
 
 const DEFAULT_PORT = 8081;
 const HEARTBEAT_INTERVAL_MS = 15000;
+const RATE_LIMIT_TOKENS = 20;
+const RATE_LIMIT_INTERVAL_MS = 10000;
 const PONG_MSG = JSON.stringify({ t: 'pong' });
+const RATE_LIMIT_MESSAGE = JSON.stringify({ t: 'error', message: 'rate_limit' });
 
 function resolvePort(raw: string | undefined, fallback: number): number {
   if (raw === undefined) {
@@ -45,6 +48,20 @@ let duel = newDuelRound();
 const wallets = new Map<string, number>();
 const sockets = new Map<string, WebSocket>();
 const heartbeatTimers = new Set<ReturnType<typeof setInterval>>();
+const rateLimitBuckets = new Map<string, number>();
+
+const rateLimitReset = setInterval(() => {
+  rateLimitBuckets.clear();
+}, RATE_LIMIT_INTERVAL_MS);
+
+function consumeRateLimitToken(key: string): boolean {
+  const tokens = rateLimitBuckets.get(key) ?? RATE_LIMIT_TOKENS;
+  if (tokens <= 0) {
+    return false;
+  }
+  rateLimitBuckets.set(key, tokens - 1);
+  return true;
+}
 
 function snapshot(): Snapshot {
   const operatorProfit = totalWageredAll - totalPayoutsAll;
@@ -320,6 +337,13 @@ wss.on('connection', (ws, request) => {
     }
 
     const msg: ClientMsg = parsed.data;
+    const rateLimitKey = uid ?? ip;
+    if (!consumeRateLimitToken(rateLimitKey)) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send(RATE_LIMIT_MESSAGE); } catch {}
+      }
+      return;
+    }
     try {
       if (msg.t === 'ping') {
         ensureHeartbeat();
@@ -368,6 +392,8 @@ export function getSocketCount(): number {
 
 export async function shutdown() {
   clearInterval(loop);
+  clearInterval(rateLimitReset);
+  rateLimitBuckets.clear();
   for (const timer of heartbeatTimers) {
     clearInterval(timer);
   }
