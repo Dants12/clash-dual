@@ -109,6 +109,17 @@
   box-sizing: border-box;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 html,
 body {
   margin: 0;
@@ -423,6 +434,23 @@ body::before {
   gap: var(--gap-md);
 }
 
+.card > .title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-heading);
+}
+
+.card > .space {
+  height: 1px;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+  opacity: 0.6;
+  flex: none;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -618,6 +646,11 @@ body::before {
   transform: translateY(1px);
 }
 
+.button:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
 .button:disabled {
   cursor: not-allowed;
   filter: saturate(0.75) brightness(0.85);
@@ -652,6 +685,11 @@ body::before {
   background: var(--segmented-active-bg);
   color: var(--segmented-active-color);
   box-shadow: var(--segmented-active-shadow);
+}
+
+.segmented button:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
 }
 
 .segmented--spread {
