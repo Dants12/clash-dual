@@ -115,7 +115,7 @@ test('server rejects duplicate bet ids from the same player', async (t) => {
 
   await once(server.stdout, 'data');
 
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   t.after(() => ws.close());
   await once(ws, 'open');
   const queue = createMessageQueue(ws);

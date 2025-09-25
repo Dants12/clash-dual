@@ -29,7 +29,7 @@ test('uses fallback port when PORT env var is invalid', async (t) => {
     `Expected startup log to reference fallback port ${FALLBACK_PORT}, got: ${startupLog}`
   );
 
-  const ws = new WebSocket(`ws://127.0.0.1:${FALLBACK_PORT}`);
+  const ws = new WebSocket(`ws://127.0.0.1:${FALLBACK_PORT}/ws`);
   t.after(() => {
     ws.close();
   });
