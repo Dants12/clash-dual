@@ -66,10 +66,10 @@ function resolveWSUrl(): string {
   }
 
   if (hostname) {
-    return `${proto}//${hostname}${path}`;
+    return `${proto}//${hostname}:${devPort}${path}`;
   }
 
-  return `${proto}//localhost${path}`;
+  return `${proto}//localhost:${devPort}${path}`;
 }
 
 export function createWS(onMsg: (m: any) => void) {
