@@ -40,8 +40,6 @@ const phaseToneMap: Record<string, BadgeTone> = {
 
 const QUICK_TOPUPS = [500, 1_000, 2_500, 5_000, 10_000, 25_000];
 const BET_PRESETS = [500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000];
-const THEME_STORAGE_KEY = 'clash-dual-theme';
-
 const generateBetId = () => {
   const globalCrypto = typeof globalThis !== 'undefined' ? (globalThis as { crypto?: Crypto }).crypto : undefined;
   if (globalCrypto?.randomUUID) {
@@ -67,22 +65,6 @@ export default function App() {
   const [microStep, setMicroStep] = useState(1);
   const [targetInputs, setTargetInputs] = useState<Record<Side, string>>({ A: '', B: '' });
   const [targetRoundId, setTargetRoundId] = useState<string | null>(null);
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    let initial: 'dark' | 'light' = 'dark';
-    if (typeof window !== 'undefined') {
-      const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-      if (stored === 'dark' || stored === 'light') {
-        initial = stored;
-      } else {
-        const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-        initial = prefersDark ? 'dark' : 'light';
-      }
-    }
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-theme', initial);
-    }
-    return initial;
-  });
   const commit = (import.meta.env.VITE_COMMIT as string | undefined) || 'local';
   const lastBet = useRef<{
     amount: number;
@@ -187,26 +169,6 @@ export default function App() {
   const now = Date.now();
   const crashTimeLeft = crashRound ? Math.max(0, crashRound.endsAt - now) : 0;
   const duelTimeLeft = duelRound ? Math.max(0, duelRound.endsAt - now) : 0;
-
-  useEffect(() => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-    document.documentElement.setAttribute('data-theme', theme);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    }
-  }, [theme]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-    const root = document.documentElement;
-    return () => {
-      root.removeAttribute('data-theme');
-    };
-  }, []);
 
   useEffect(() => {
     if (!crashRound) {
@@ -509,30 +471,6 @@ export default function App() {
               </button>
             </div>
             <p className="app-header__controls-hint">Switch modes while connected to explore both arenas.</p>
-          </div>
-          <div className="app-header__controls-group">
-            <span className="app-header__controls-label">Theme</span>
-            <div className="segmented segmented--spread" role="group" aria-label="Select interface theme">
-              <button
-                className="button button--muted"
-                type="button"
-                data-active={theme === 'dark'}
-                onClick={() => setTheme('dark')}
-                disabled={theme === 'dark'}
-              >
-                Dark
-              </button>
-              <button
-                className="button button--muted"
-                type="button"
-                data-active={theme === 'light'}
-                onClick={() => setTheme('light')}
-                disabled={theme === 'light'}
-              >
-                Light
-              </button>
-            </div>
-            <p className="app-header__controls-hint">Choose a visual style for the control room.</p>
           </div>
         </div>
       </header>
