@@ -48,17 +48,28 @@ function resolveWSUrl(): string {
     return envUrl;
   }
 
-  const { protocol, host, hostname } = window.location;
+  const { protocol, host, hostname, port } = window.location;
   const proto = protocol === 'https:' ? 'wss:' : 'ws:';
+  const baseHost = hostname || 'localhost';
+  const path = (import.meta.env?.VITE_WS_PATH as string | undefined) ?? '/ws';
+
+  const devPort = (import.meta.env?.VITE_WS_PORT as string | undefined) ?? '8081';
+  const devPorts = new Set(['5173', '4173']);
+  const shouldUseDevPort = Boolean(import.meta.env?.DEV) || (port && devPorts.has(port));
+
+  if (shouldUseDevPort) {
+    return `${proto}//${baseHost}:${devPort}${path}`;
+  }
+
   if (host) {
-    return `${proto}//${host}/ws`;
+    return `${proto}//${host}${path}`;
   }
 
   if (hostname) {
-    return `${proto}//${hostname}/ws`;
+    return `${proto}//${hostname}${path}`;
   }
 
-  return `${proto}//localhost/ws`;
+  return `${proto}//localhost${path}`;
 }
 
 export function createWS(onMsg: (m: any) => void) {
