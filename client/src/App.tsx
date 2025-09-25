@@ -529,18 +529,18 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <span className="wallet-topups__hint text-muted">Quick top-ups add funds instantly while connected.</span>
+              <span className="wallet-topups__hint text-muted">Quickly add funds before the next round begins.</span>
 
               <div className="wallet-targets">
                 <div className="wallet-targets__header">
-                  <span>Target multipliers</span>
+                  <span>Crash multipliers</span>
                   <button
                     className="button button--muted button--compact"
                     type="button"
                     onClick={resetTargetsToRound}
                     disabled={!crashRound}
                   >
-                    Reset to round
+                    Reset
                   </button>
                 </div>
                 <div className="wallet-targets__inputs">
@@ -922,28 +922,9 @@ export default function App() {
           <span className="app-footer__note">Simulation environment for crash and duel mechanics.</span>
         </div>
       </footer>
-      <div
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          zIndex: 1000,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 14px',
-          borderRadius: '999px',
-          background: 'var(--color-surface-strong)',
-          border: '1px solid var(--color-border-strong)',
-          boxShadow: '0 18px 40px rgba(6, 10, 26, 0.35)',
-          fontSize: '12px',
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          color: 'var(--color-muted)'
-        }}
-      >
-        <span style={{ opacity: 0.72 }}>Build</span>
-        <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>{commit}</span>
+      <div className="build-indicator">
+        <span>Build</span>
+        <span className="build-indicator__commit">{commit}</span>
       </div>
     </div>
   );
