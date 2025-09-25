@@ -14,7 +14,11 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <title>build %VITE_COMMIT% Clash Dual · Realtime Crash &amp; Duel Playground</title>
+    <title>Clash Dual · Realtime Crash &amp; Duel Playground</title>
+    <script type="module">
+      const commit = import.meta.env.VITE_COMMIT || 'local';
+      document.title = `build ${commit} Clash Dual · Realtime Crash & Duel Playground`;
+    </script>
   </head>
   <body>
     <div id="root"></div>
