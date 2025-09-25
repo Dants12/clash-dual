@@ -65,7 +65,7 @@ test('rejects invalid payloads with an error and logs origin', async (t) => {
     stderrOutput += chunk.toString();
   });
 
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   t.after(() => {
     ws.close();
   });

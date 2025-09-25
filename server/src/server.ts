@@ -624,7 +624,7 @@ function handleFatalError(error: unknown) {
 
 httpServer.on('error', handleFatalError);
 
-const wss = new WebSocketServer({ server: httpServer });
+const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 wss.on('error', handleFatalError);
 
 httpServer.listen(PORT, () => {

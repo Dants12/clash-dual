@@ -68,7 +68,7 @@ test('cleans up sockets after disconnects and keeps streaming snapshots', async 
   });
 
   for (let i = 0; i < 10; i++) {
-    const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
     await once(ws, 'open');
     const messages = createMessageQueue(ws);
 
@@ -85,7 +85,7 @@ test('cleans up sockets after disconnects and keeps streaming snapshots', async 
     });
   }
 
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   await once(ws, 'open');
   const messages = createMessageQueue(ws);
   ws.send(JSON.stringify({ t: 'auth' }));

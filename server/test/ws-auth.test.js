@@ -70,7 +70,7 @@ test('allows betting and cashing out on the same authenticated socket', async (t
 
   await once(server.stdout, 'data');
 
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   t.after(() => {
     ws.close();
   });
