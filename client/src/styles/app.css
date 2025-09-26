@@ -367,27 +367,30 @@ body::before {
   width: min(100%, var(--layout-max-width));
   margin: 0 auto;
   padding: 0 var(--layout-gutter) 18px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--layout-column-gap);
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.6fr) minmax(220px, 1fr);
+  column-gap: var(--layout-column-gap);
+  row-gap: var(--gap-lg);
+  align-items: start;
 }
 
 .column {
   display: flex;
   flex-direction: column;
   gap: var(--gap-lg);
-  min-width: clamp(220px, 22vw, 320px);
-  flex: 1 1 clamp(280px, 26vw, 340px);
+  min-width: 0;
+}
+
+.column-left {
+  grid-column: 1;
 }
 
 .column-center {
-  min-width: clamp(360px, 40vw, 680px);
-  flex: 1.5 1 clamp(520px, 50vw, 760px);
+  grid-column: 2;
 }
 
 .column-right {
-  flex: 1 1 clamp(280px, 26vw, 340px);
+  grid-column: 3;
 }
 
 .card {
@@ -1129,15 +1132,8 @@ input[type='range'] {
   }
 
   .layout {
-    gap: clamp(22px, 4vw, 32px);
-  }
-
-  .column {
-    flex: 1 1 clamp(260px, 28vw, 340px);
-  }
-
-  .column-center {
-    flex: 1.4 1 clamp(480px, 52vw, 700px);
+    grid-template-columns: minmax(200px, 1fr) minmax(320px, 1.5fr) minmax(200px, 1fr);
+    column-gap: clamp(22px, 4vw, 32px);
   }
 }
 
@@ -1156,37 +1152,22 @@ input[type='range'] {
   }
 
   .layout {
-    justify-content: center;
-  }
-
-  .column {
-    flex: 1 1 clamp(240px, 36vw, 340px);
-    min-width: clamp(220px, 32vw, 320px);
-  }
-
-  .column-center {
-    flex: 1.2 1 min(50%, 680px);
-    min-width: min(50%, 640px);
+    grid-template-columns: minmax(200px, 1fr) minmax(320px, 1.4fr) minmax(200px, 1fr);
+    column-gap: clamp(20px, 5vw, 28px);
   }
 }
 
 @media (max-width: 1040px) {
   .layout {
     padding: 0 clamp(22px, 7vw, 38px) 18px;
-    gap: var(--gap-md);
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--gap-lg);
   }
 
-  .column {
-    flex: 1 1 50%;
-    min-width: 50%;
-  }
-
-  .column-center {
-    order: 2;
-  }
-
+  .column-left,
+  .column-center,
   .column-right {
-    order: 3;
+    grid-column: auto;
   }
 
   .app-header {
