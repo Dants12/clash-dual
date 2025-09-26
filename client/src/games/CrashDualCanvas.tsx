@@ -579,5 +579,5 @@ export default function CrashDualCanvas({ mA, mB, targetA, targetB, phase }: Cra
     };
   }, []);
 
-  return <canvas ref={ref} width={900} height={460} style={{ width: '100%', height: '100%', display: 'block' }} />;
+  return <canvas ref={ref} width={900} height={460} style={{ width: '900px', height: '460px', display: 'block' }} />;
 }
