@@ -138,7 +138,7 @@ body::before {
 }
 
 #root {
-  width: 50%;
+  width: 100%;
 }
 
 .app-shell {
@@ -278,7 +278,7 @@ body::before {
 }
 
 .app-header__controls .segmented {
-  width: 50%;
+  width: 100%;
   justify-content: space-between;
 }
 
@@ -291,7 +291,7 @@ body::before {
   --layout-gutter: clamp(28px, 5vw, 48px);
   --layout-column-gap: clamp(24px, 4vw, 36px);
   flex: 1;
-  width: 50%;
+  width: min(100%, var(--layout-max-width));
   padding: clamp(40px, 6vw, 80px) 0 clamp(64px, 8vw, 108px);
   display: flex;
   flex-direction: column;
@@ -300,7 +300,7 @@ body::before {
 }
 
 .app-main__intro {
-  width: min(50%, var(--layout-max-width));
+  width: min(100%, var(--layout-max-width));
   margin: 0 auto;
   padding: clamp(24px, 3vw, 36px);
   display: grid;
@@ -364,7 +364,7 @@ body::before {
 }
 
 .layout {
-  width: min(50%, var(--layout-max-width));
+  width: min(100%, var(--layout-max-width));
   margin: 0 auto;
   padding: 0 var(--layout-gutter) 18px;
   display: flex;
@@ -633,7 +633,7 @@ body::before {
 }
 
 .segmented--spread {
-  width: 50%;
+  width: 100%;
 }
 
 .segmented--spread button {
@@ -644,7 +644,7 @@ input[type='number'],
 input[type='text'],
 input[type='search'],
 input[type='email'] {
-  width: 50%;
+  width: 100%;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-input-border);
   background: var(--color-input-bg);
@@ -665,7 +665,7 @@ input:disabled {
 }
 
 input[type='range'] {
-  width: 50%;
+  width: 100%;
   accent-color: var(--color-secondary);
   cursor: pointer;
 }
