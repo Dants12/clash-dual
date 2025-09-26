@@ -1086,7 +1086,7 @@ input[type='range'] {
 }
 
 .app-footer__inner {
-  max-width: min(1680px, 50%);
+  max-width: min(1680px, 100%);
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
