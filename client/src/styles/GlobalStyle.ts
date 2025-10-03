@@ -1,3 +1,6 @@
+import { createGlobalStyle } from 'styled-components';
+
+export const GlobalStyle = createGlobalStyle`
 :root {
   --font-sans: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --radius-lg: 22px;
@@ -1296,3 +1299,5 @@ input[type='range'] {
   color: var(--color-secondary);
   font-weight: 600;
 }
+
+`;
