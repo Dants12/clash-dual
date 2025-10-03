@@ -69,7 +69,7 @@ const generateBetId = () => {
   return `bet-${timestamp}-${random}`;
 };
 
-const COLUMN_KEYS = ['left', 'center', 'right'] as const;
+const COLUMN_KEYS = ['main'] as const;
 type ColumnKey = (typeof COLUMN_KEYS)[number];
 type PanelId = 'wallet' | 'bet' | 'micro' | 'arena' | 'investor' | 'stats' | 'totals' | 'events';
 
@@ -78,28 +78,22 @@ type Layout = Record<ColumnKey, PanelId[]>;
 const PANEL_IDS: readonly PanelId[] = ['wallet', 'bet', 'micro', 'arena', 'investor', 'stats', 'totals', 'events'];
 
 const COLUMN_CLASSNAMES: Record<ColumnKey, string> = {
-  left: 'column column-left',
-  center: 'column column-center',
-  right: 'column column-right'
+  main: 'column column-main'
 };
 
 const initialLayout: Layout = {
-  left: ['wallet', 'bet', 'micro'],
-  center: ['arena'],
-  right: ['investor', 'stats', 'totals', 'events']
+  main: ['wallet', 'bet', 'micro', 'arena', 'investor', 'stats', 'totals', 'events']
 };
 
 const LAYOUT_STORAGE_KEY = 'clash-dual:layout:v1';
 
 const cloneLayout = (value: Layout): Layout => ({
-  left: [...value.left],
-  center: [...value.center],
-  right: [...value.right]
+  main: [...value.main]
 });
 
 const normalizeLayout = (candidate?: Partial<Record<ColumnKey, PanelId[]>>): Layout => {
   const seen = new Set<PanelId>();
-  const next: Layout = { left: [], center: [], right: [] };
+  const next: Layout = { main: [] };
 
   for (const column of COLUMN_KEYS) {
     const panels = Array.isArray(candidate?.[column]) ? candidate?.[column] ?? [] : [];
@@ -114,7 +108,8 @@ const normalizeLayout = (candidate?: Partial<Record<ColumnKey, PanelId[]>>): Lay
 
   for (const panel of PANEL_IDS) {
     if (!seen.has(panel)) {
-      const fallbackColumn = COLUMN_KEYS.find((column) => initialLayout[column].includes(panel)) ?? 'left';
+      const fallbackColumn =
+        COLUMN_KEYS.find((column) => initialLayout[column].includes(panel)) ?? COLUMN_KEYS[0];
       next[fallbackColumn].push(panel);
       seen.add(panel);
     }
@@ -989,9 +984,7 @@ export default function App() {
 
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
           <div className="layout">
-            {COLUMN_KEYS.map((column) => (
-              <ColumnSection key={column} column={column} />
-            ))}
+            <ColumnSection column="main" />
           </div>
         </DndContext>
       </main>

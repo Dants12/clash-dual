@@ -367,11 +367,10 @@ body::before {
   width: min(100%, var(--layout-max-width));
   margin: 0 auto;
   padding: 0 var(--layout-gutter) 18px;
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.6fr) minmax(220px, 1fr);
-  column-gap: var(--layout-column-gap);
-  row-gap: var(--gap-lg);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-lg);
 }
 
 .column {
@@ -380,24 +379,20 @@ body::before {
   gap: var(--gap-lg);
   min-width: 0;
   position: relative;
+  width: 100%;
 }
 
-.column-left {
-  grid-column: 1;
-}
-
-.column-center {
-  grid-column: 2;
-}
-
-.column-right {
-  grid-column: 3;
+.column-main {
+  width: 700px;
+  margin: 0 auto;
 }
 
 .draggable-panel {
   cursor: grab;
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   will-change: transform;
+  width: 100%;
+  max-width: 700px;
 }
 
 .draggable-panel:focus-visible {
@@ -1174,11 +1169,6 @@ input[type='range'] {
   .app-main__intro {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-
-  .layout {
-    grid-template-columns: minmax(200px, 1fr) minmax(320px, 1.5fr) minmax(200px, 1fr);
-    column-gap: clamp(22px, 4vw, 32px);
-  }
 }
 
 @media (max-width: 1180px) {
@@ -1194,26 +1184,9 @@ input[type='range'] {
   .app-header__controls .segmented {
     justify-content: flex-start;
   }
-
-  .layout {
-    grid-template-columns: minmax(200px, 1fr) minmax(320px, 1.4fr) minmax(200px, 1fr);
-    column-gap: clamp(20px, 5vw, 28px);
-  }
 }
 
 @media (max-width: 1040px) {
-  .layout {
-    padding: 0 clamp(22px, 7vw, 38px) 18px;
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: var(--gap-lg);
-  }
-
-  .column-left,
-  .column-center,
-  .column-right {
-    grid-column: auto;
-  }
-
   .app-header {
     grid-template-columns: minmax(0, 1fr);
     position: static;
@@ -1241,10 +1214,6 @@ input[type='range'] {
 }
 
 @media (max-width: 780px) {
-  .layout {
-    padding: 0 clamp(18px, 8vw, 28px) 18px;
-  }
-
   .app-main__intro {
     margin-inline: clamp(18px, 8vw, 28px);
   }
