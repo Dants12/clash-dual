@@ -379,6 +379,7 @@ body::before {
   flex-direction: column;
   gap: var(--gap-lg);
   min-width: 0;
+  position: relative;
 }
 
 .column-left {
@@ -391,6 +392,49 @@ body::before {
 
 .column-right {
   grid-column: 3;
+}
+
+.draggable-panel {
+  cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  will-change: transform;
+}
+
+.draggable-panel:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 6px;
+}
+
+.draggable-panel[data-dragging] {
+  cursor: grabbing;
+  opacity: 0.9;
+  box-shadow: var(--shadow-strong);
+}
+
+.draggable-panel[data-dragging] .card {
+  pointer-events: none;
+}
+
+.draggable-panel[data-sorting]:not([data-dragging]) {
+  transition: transform 0.2s ease;
+}
+
+.column[data-dropping] {
+  background: linear-gradient(145deg, rgba(124, 109, 255, 0.08), rgba(77, 208, 255, 0.06));
+  border-radius: var(--radius-lg);
+  outline: 1px dashed rgba(124, 109, 255, 0.4);
+  outline-offset: 8px;
+}
+
+.column-placeholder {
+  height: 12px;
+  pointer-events: none;
+}
+
+.column[data-dropping] .column-placeholder {
+  height: 32px;
+  background: linear-gradient(135deg, rgba(124, 109, 255, 0.18), rgba(77, 208, 255, 0.12));
+  border-radius: var(--radius-md);
 }
 
 .card {

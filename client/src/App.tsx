@@ -1,4 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCorners,
+  useDroppable,
+  useSensor,
+  useSensors
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import CrashDualCanvas from './games/CrashDualCanvas';
 import DuelABPanel from './games/DuelABPanel';
 import { createWS, persistUid } from './ws';
@@ -52,8 +69,113 @@ const generateBetId = () => {
   return `bet-${timestamp}-${random}`;
 };
 
+const COLUMN_KEYS = ['left', 'center', 'right'] as const;
+type ColumnKey = (typeof COLUMN_KEYS)[number];
+type PanelId = 'wallet' | 'bet' | 'micro' | 'arena' | 'investor' | 'stats' | 'totals' | 'events';
+
+type Layout = Record<ColumnKey, PanelId[]>;
+
+const PANEL_IDS: readonly PanelId[] = ['wallet', 'bet', 'micro', 'arena', 'investor', 'stats', 'totals', 'events'];
+
+const COLUMN_CLASSNAMES: Record<ColumnKey, string> = {
+  left: 'column column-left',
+  center: 'column column-center',
+  right: 'column column-right'
+};
+
+const initialLayout: Layout = {
+  left: ['wallet', 'bet', 'micro'],
+  center: ['arena'],
+  right: ['investor', 'stats', 'totals', 'events']
+};
+
+const LAYOUT_STORAGE_KEY = 'clash-dual:layout:v1';
+
+const cloneLayout = (value: Layout): Layout => ({
+  left: [...value.left],
+  center: [...value.center],
+  right: [...value.right]
+});
+
+const normalizeLayout = (candidate?: Partial<Record<ColumnKey, PanelId[]>>): Layout => {
+  const seen = new Set<PanelId>();
+  const next: Layout = { left: [], center: [], right: [] };
+
+  for (const column of COLUMN_KEYS) {
+    const panels = Array.isArray(candidate?.[column]) ? candidate?.[column] ?? [] : [];
+    for (const panel of panels) {
+      if ((PANEL_IDS as readonly string[]).includes(panel) && !seen.has(panel as PanelId)) {
+        const id = panel as PanelId;
+        next[column].push(id);
+        seen.add(id);
+      }
+    }
+  }
+
+  for (const panel of PANEL_IDS) {
+    if (!seen.has(panel)) {
+      const fallbackColumn = COLUMN_KEYS.find((column) => initialLayout[column].includes(panel)) ?? 'left';
+      next[fallbackColumn].push(panel);
+      seen.add(panel);
+    }
+  }
+
+  return next;
+};
+
+const loadLayout = (): Layout | null => {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Record<ColumnKey, PanelId[]>>;
+    return normalizeLayout(parsed);
+  } catch {
+    return null;
+  }
+};
+
+const saveLayout = (value: Layout) => {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+  try {
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(value));
+  } catch {}
+};
+
+function SortablePanel({ id, children }: { id: PanelId; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isSorting } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    touchAction: 'manipulation'
+  };
+
+  if (isDragging) {
+    style.zIndex = 5;
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="draggable-panel"
+      data-dragging={isDragging || undefined}
+      data-sorting={isSorting || undefined}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function App() {
   const [ws, setWS] = useState<WebSocket | null>(null);
+  const [layout, setLayout] = useState<Layout>(() => loadLayout() ?? cloneLayout(initialLayout));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const uid = useRef<string>('');
   const [wallet, setWallet] = useState(0);
   const [snap, setSnap] = useState<Snapshot | null>(null);
@@ -75,6 +197,10 @@ export default function App() {
   const pushEvent = useCallback((text: string) => {
     setEvents((prev) => [{ id: eventId(), text, ts: Date.now() }, ...prev].slice(0, 30));
   }, []);
+
+  useEffect(() => {
+    saveLayout(layout);
+  }, [layout]);
 
   const handleSnapshot = useCallback((incoming: Snapshot) => {
     setSnap((prev) => {
@@ -142,6 +268,47 @@ export default function App() {
       ws.send(JSON.stringify(payload));
     }
   }, [ws]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id as PanelId;
+    if (!(PANEL_IDS as readonly string[]).includes(activeId)) return;
+
+    setLayout((prev) => {
+      const sourceColumn = COLUMN_KEYS.find((column) => prev[column].includes(activeId));
+      if (!sourceColumn) return prev;
+
+      const sourceIndex = prev[sourceColumn].indexOf(activeId);
+      const overId = over.id as string;
+      let targetColumn: ColumnKey | undefined;
+      let targetIndex: number;
+
+      if ((COLUMN_KEYS as readonly string[]).includes(overId)) {
+        targetColumn = overId as ColumnKey;
+        targetIndex = prev[targetColumn].length;
+      } else if ((PANEL_IDS as readonly string[]).includes(overId)) {
+        targetColumn = COLUMN_KEYS.find((column) => prev[column].includes(overId as PanelId));
+        if (!targetColumn) return prev;
+        targetIndex = prev[targetColumn].indexOf(overId as PanelId);
+        if (targetColumn === sourceColumn && targetIndex > sourceIndex) {
+          targetIndex -= 1;
+        }
+      } else {
+        return prev;
+      }
+
+      if (!targetColumn) return prev;
+      if (targetColumn === sourceColumn && targetIndex === sourceIndex) return prev;
+
+      const next = cloneLayout(prev);
+      next[sourceColumn].splice(sourceIndex, 1);
+      const boundedIndex = Math.max(0, Math.min(targetIndex, next[targetColumn].length));
+      next[targetColumn].splice(boundedIndex, 0, activeId);
+      return next;
+    });
+  }, []);
 
   const readyState = ws?.readyState ?? WebSocket.CLOSED;
   const isLive = readyState === WebSocket.OPEN;
@@ -333,7 +500,439 @@ export default function App() {
             ]
           : []);
 
-  const eventTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const eventTime = (ts: number) =>
+    new Date(ts).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const renderWalletCard = () => (
+    <Card title="Wallet &amp; Mode" subtitle="Session overview">
+      <div className="wallet-balance">
+        <span className="wallet-balance__label">Balance</span>
+        <div className="wallet-balance__value">{formatCents(wallet)}</div>
+        <div className="wallet-balance__tags">
+          <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
+          <Badge tone={riskProfile.tone}>Risk · {riskProfile.label}</Badge>
+        </div>
+      </div>
+
+      <div className="wallet-topups">
+        {QUICK_TOPUPS.map((value) => (
+          <button
+            key={value}
+            className="button button--secondary button--compact"
+            type="button"
+            onClick={() => requestTopUp(value)}
+            disabled={!isLive}
+          >
+            +{formatCents(value)}
+          </button>
+        ))}
+      </div>
+      <span className="wallet-topups__hint text-muted">Quickly add funds before the next round begins.</span>
+
+      <div className="wallet-targets">
+        <div className="wallet-targets__header">
+          <span>Crash multipliers</span>
+          <button
+            className="button button--muted button--compact"
+            type="button"
+            onClick={resetTargetsToRound}
+            disabled={!crashRound}
+          >
+            Reset
+          </button>
+        </div>
+        <div className="wallet-targets__inputs">
+          <div className="wallet-targets__input">
+            <label htmlFor="target-a">Side A</label>
+            <input
+              id="target-a"
+              type="number"
+              inputMode="decimal"
+              min={1}
+              step={0.01}
+              value={targetInputs.A}
+              onChange={(e) => setTargetInputs((prev) => ({ ...prev, A: e.target.value }))}
+              onBlur={(e) => {
+                const parsed = Number.parseFloat(e.target.value);
+                setTargetInputs((prev) => ({ ...prev, A: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
+              }}
+              disabled={!canEditTargets}
+            />
+          </div>
+          <div className="wallet-targets__input">
+            <label htmlFor="target-b">Side B</label>
+            <input
+              id="target-b"
+              type="number"
+              inputMode="decimal"
+              min={1}
+              step={0.01}
+              value={targetInputs.B}
+              onChange={(e) => setTargetInputs((prev) => ({ ...prev, B: e.target.value }))}
+              onBlur={(e) => {
+                const parsed = Number.parseFloat(e.target.value);
+                setTargetInputs((prev) => ({ ...prev, B: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
+              }}
+              disabled={!canEditTargets}
+            />
+          </div>
+        </div>
+        <div className="wallet-targets__foot">
+          {crashRound ? (
+            <>
+              <span className="wallet-targets__round">
+                Round · A {formatMultiplier(crashRound.targetA)} · B {formatMultiplier(crashRound.targetB)}
+              </span>
+              <span className="wallet-targets__delta">
+                Plan offset:&nbsp;
+                <strong>A {targetOffsets.A != null ? formatMultiplierDelta(targetOffsets.A) : '—'}</strong>
+                <span className="wallet-targets__divider">·</span>
+                <strong>B {targetOffsets.B != null ? formatMultiplierDelta(targetOffsets.B) : '—'}</strong>
+              </span>
+            </>
+          ) : (
+            <Badge tone="muted">Targets available in Crash Dual mode</Badge>
+          )}
+        </div>
+      </div>
+
+      <div className="wallet-metrics">
+        <MetricRow label="UID" value={uid.current || '—'} align="start" />
+        <MetricRow
+          label="Active mode"
+          value={<Badge tone="primary">{modeLabel}</Badge>}
+          hint={`Phase ${activePhase ?? '—'}`}
+          align="start"
+        />
+        <MetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} align="start" />
+        <MetricRow label="RTP (avg)" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} hint="House rolling average" />
+        <MetricRow
+          label="Risk status"
+          value={<Badge tone={riskProfile.tone}>{riskProfile.label}</Badge>}
+          hint={riskProfile.hint}
+          align="start"
+        />
+        <MetricRow label="Rounds played" value={snap?.rounds ?? 0} />
+      </div>
+    </Card>
+  );
+
+  const renderBetCard = () => (
+    <Card title="Main bet" subtitle="Place wagers on the active game">
+      <div className="control-group">
+        <label htmlFor="bet-amount">Bet amount</label>
+        <input
+          id="bet-amount"
+          type="number"
+          min={0}
+          value={amount}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            setAmount(Number.isFinite(next) ? Math.max(0, next) : 0);
+          }}
+        />
+      </div>
+
+      <div className="bet-stepper">
+        <button
+          className="button button--muted button--compact"
+          type="button"
+          onClick={() => adjustAmount(-sliderStep)}
+          disabled={sanitizedAmount <= 0}
+        >
+          −{formatCents(sliderStep)}
+        </button>
+        <span className="bet-stepper__value">{formatCents(sanitizedAmount)}</span>
+        <button
+          className="button button--secondary button--compact"
+          type="button"
+          onClick={() => adjustAmount(sliderStep)}
+          disabled={wallet <= 0}
+        >
+          +{formatCents(sliderStep)}
+        </button>
+      </div>
+
+      <div className="bet-presets">
+        {BET_PRESETS.map((value) => (
+          <button
+            key={value}
+            className="button button--muted button--compact"
+            type="button"
+            data-active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
+            onClick={() => setAmount(wallet > 0 ? Math.min(value, wallet) : value)}
+          >
+            {formatCents(value)}
+          </button>
+        ))}
+      </div>
+
+      <div className="bet-slider">
+        <label htmlFor="bet-slider">Quick adjust</label>
+        <input
+          id="bet-slider"
+          type="range"
+          min={0}
+          max={sliderMax}
+          step={sliderStep}
+          value={sanitizedAmount}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            if (!Number.isFinite(next)) return;
+            const normalized = Math.max(0, Math.round(next));
+            setAmount(wallet > 0 ? Math.min(normalized, wallet) : normalized);
+          }}
+          disabled={sliderDisabled}
+        />
+        <div className="bet-slider__scale">
+          <span>{formatCents(0)}</span>
+          <span>{formatCents(sliderMax)}</span>
+        </div>
+      </div>
+
+      <div className="bet-side-overview">
+        <div className="bet-side-chip" data-side={side}>
+          <span className="bet-side-chip__label">Selected</span>
+          <span className="bet-side-chip__value">Side {side}</span>
+          {mode === 'crash_dual' && (
+            <span className="bet-side-chip__plan">
+              Target · {activeTargetPlan != null ? formatMultiplier(activeTargetPlan) : '—'}
+            </span>
+          )}
+        </div>
+        <div className="bet-side-actions">
+          <button className="button button--muted button--compact" type="button" data-active={side === 'A'} onClick={() => setSide('A')}>
+            A
+          </button>
+          <button className="button button--muted button--compact" type="button" data-active={side === 'B'} onClick={() => setSide('B')}>
+            B
+          </button>
+          <button className="button button--secondary button--compact" type="button" onClick={toggleSide}>
+            Swap
+          </button>
+        </div>
+      </div>
+
+      <div className="button-row">
+        <button className="button button--primary" type="button" onClick={placeBet} disabled={!canPlaceBet}>
+          Place bet
+        </button>
+        {mode === 'crash_dual' && (
+          <button className="button button--secondary" type="button" onClick={cashout} disabled={!canCashout}>
+            Cash out
+          </button>
+        )}
+      </div>
+      <span className="text-muted">Betting is available during the betting phase.</span>
+    </Card>
+  );
+
+  const renderMicroCard = () => (
+    <Card title="Micro-bets" subtitle="Fine-tune duel combatants">
+      <div className="control-group">
+        <label htmlFor="micro-step">Adjustment step</label>
+        <input
+          id="micro-step"
+          type="number"
+          min={1}
+          value={microStep}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            setMicroStep(Number.isFinite(next) ? Math.max(1, Math.min(50, Math.floor(next))) : 1);
+          }}
+        />
+      </div>
+      {!canAdjustMicro && <Badge tone="warning">Switch to duel mode to adjust stats</Badge>}
+      <div className="micro-grid">
+        {(['A', 'B'] as const).map((target) => (
+          <div key={target} className="micro-side">
+            <div className="micro-side-header">
+              <Badge tone="secondary">Side {target}</Badge>
+            </div>
+            <div className="micro-stat">
+              <MetricRow label="Speed" value={duelRound?.micro?.[target]?.speed ?? 0} />
+              <div className="micro-controls">
+                <button
+                  className="button button--secondary"
+                  type="button"
+                  onClick={() => adjustMicro(target, 'speed', microStep)}
+                  disabled={!canAdjustMicro}
+                >
+                  +{microStep}
+                </button>
+                <button
+                  className="button button--muted"
+                  type="button"
+                  onClick={() => adjustMicro(target, 'speed', -microStep)}
+                  disabled={!canAdjustMicro}
+                >
+                  -{microStep}
+                </button>
+              </div>
+            </div>
+            <div className="micro-stat">
+              <MetricRow label="Defense" value={duelRound?.micro?.[target]?.defense ?? 0} />
+              <div className="micro-controls">
+                <button
+                  className="button button--secondary"
+                  type="button"
+                  onClick={() => adjustMicro(target, 'defense', microStep)}
+                  disabled={!canAdjustMicro}
+                >
+                  +{microStep}
+                </button>
+                <button
+                  className="button button--muted"
+                  type="button"
+                  onClick={() => adjustMicro(target, 'defense', -microStep)}
+                  disabled={!canAdjustMicro}
+                >
+                  -{microStep}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+
+  const renderArenaCard = () => (
+    <Card title="Game arena" subtitle={modeLabel} bodyClassName="arena-body">
+      <div className="arena-grid">
+        <div className="arena-stage">
+          {mode === 'crash_dual' && crashRound && (
+            <CrashDualCanvas
+              mA={crashRound.mA}
+              mB={crashRound.mB}
+              targetA={crashRound.targetA}
+              targetB={crashRound.targetB}
+              phase={crashRound.phase}
+            />
+          )}
+          {mode === 'duel_ab' && duelRound && (
+            <DuelABPanel micro={duelRound.micro} phase={duelRound.phase} winner={duelRound.winner} />
+          )}
+          {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
+            <div className="arena-empty">No round data yet</div>
+          )}
+        </div>
+        <aside className="arena-sidebar">
+          <div className="arena-sidebar-title">Round parameters</div>
+          <div className="arena-parameters">
+            {parameterMetrics.length === 0 && <span className="text-muted">Waiting for round data…</span>}
+            {parameterMetrics.map((metric) => (
+              <MetricRow key={String(metric.label)} label={metric.label} value={metric.value} hint={metric.hint} />
+            ))}
+          </div>
+        </aside>
+      </div>
+    </Card>
+  );
+
+  const renderInvestorCard = () => (
+    <Card title="Investor panel" subtitle="House overview">
+      <MetricRow
+        label="Connection"
+        value={<Badge tone={connectionTone}>{connectionLabel}</Badge>}
+        hint={isLive ? 'Realtime updates active' : 'Reconnect to resume updates'}
+      />
+      <MetricRow label="Bankroll" value={formatCents(snap?.bankroll ?? 0)} />
+      <MetricRow label="Jackpot" value={formatCents(snap?.jackpot ?? 0)} />
+      <MetricRow label="RTP average" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} />
+      <MetricRow label="Total rounds" value={snap?.rounds ?? 0} />
+    </Card>
+  );
+
+  const renderStatsCard = () => (
+    <Card title="Round statistics" subtitle="Performance snapshot">
+      <MetricRow label="Completed rounds" value={roundStats?.totalRounds ?? snap?.rounds ?? 0} />
+      <MetricRow label="Crash rounds" value={roundStats?.crashRounds ?? 0} />
+      <MetricRow label="Duel rounds" value={roundStats?.duelRounds ?? 0} />
+      <MetricRow label="Total wagers" value={formatCents(roundStats?.totalWagered ?? 0)} />
+      <MetricRow label="Operator profit" value={formatCents(roundStats?.operatorProfit ?? 0)} />
+      <MetricRow
+        label="Operator edge"
+        value={formatPercent(roundStats?.operatorEdge ?? 0)}
+        hint={`Target ${formatPercent(roundStats?.operatorEdgeTarget ?? 4)}`}
+      />
+    </Card>
+  );
+
+  const renderTotalsCard = () => (
+    <Card title="Round totals" subtitle={`${modeLabel} pools`}>
+      {mode === 'crash_dual' && crashRound && (
+        <>
+          <MetricRow label="Total pool" value={formatCents(crashTotals.totalA + crashTotals.totalB)} />
+          <MetricRow label="Side A" value={formatCents(crashTotals.totalA)} hint={`${crashTotals.countA} bets`} />
+          <MetricRow label="Side B" value={formatCents(crashTotals.totalB)} hint={`${crashTotals.countB} bets`} />
+          <MetricRow label="Burned" value={formatCents(crashRound.burned)} />
+          <MetricRow label="Payouts" value={formatCents(crashRound.payouts)} />
+        </>
+      )}
+      {mode === 'duel_ab' && duelRound && (
+        <>
+          <MetricRow label="Total pot" value={formatCents(duelTotals.total)} />
+          <MetricRow label="Side A" value={formatCents(duelTotals.totalA)} hint={`${duelTotals.countA} bets`} />
+          <MetricRow label="Side B" value={formatCents(duelTotals.totalB)} hint={`${duelTotals.countB} bets`} />
+          <MetricRow label="Winner" value={duelRound.winner ?? '—'} />
+        </>
+      )}
+      {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
+        <span className="text-muted">Totals will appear when a round begins.</span>
+      )}
+    </Card>
+  );
+
+  const renderEventsCard = () => (
+    <Card title="Events" subtitle="Latest activity">
+      {events.length === 0 ? (
+        <span className="text-muted">No events yet. Place a bet to get started.</span>
+      ) : (
+        <ul className="event-list">
+          {events.map((entry) => (
+            <li key={entry.id} className="event-item">
+              <span className="event-time">{eventTime(entry.ts)}</span>
+              <span className="event-text">{entry.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+
+  const panels: Record<PanelId, () => React.ReactNode> = {
+    wallet: renderWalletCard,
+    bet: renderBetCard,
+    micro: renderMicroCard,
+    arena: renderArenaCard,
+    investor: renderInvestorCard,
+    stats: renderStatsCard,
+    totals: renderTotalsCard,
+    events: renderEventsCard
+  };
+
+  const ColumnSection = ({ column }: { column: ColumnKey }) => {
+    const { setNodeRef, isOver } = useDroppable({ id: column });
+    const columnPanels = layout[column];
+
+    return (
+      <div ref={setNodeRef} className={COLUMN_CLASSNAMES[column]} data-dropping={isOver || undefined}>
+        <SortableContext items={columnPanels} strategy={verticalListSortingStrategy}>
+          {columnPanels.map((panelId) => {
+            const render = panels[panelId];
+            if (!render) return null;
+            return (
+              <SortablePanel key={panelId} id={panelId}>
+                {render()}
+              </SortablePanel>
+            );
+          })}
+        </SortableContext>
+        <div className="column-placeholder" aria-hidden="true" data-placeholder />
+      </div>
+    );
+  };
 
   return (
     <div className="app-shell">
@@ -388,276 +987,13 @@ export default function App() {
           </div>
         </section>
 
-        <div className="layout">
-          {/* LEFT COLUMN */}
-          <div className="column column-left">
-            <Card title="Wallet &amp; Mode" subtitle="Session overview">
-              <div className="wallet-balance">
-                <span className="wallet-balance__label">Balance</span>
-                <div className="wallet-balance__value">{formatCents(wallet)}</div>
-                <div className="wallet-balance__tags">
-                  <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
-                  <Badge tone={riskProfile.tone}>Risk · {riskProfile.label}</Badge>
-                </div>
-              </div>
-
-              <div className="wallet-topups">
-                {QUICK_TOPUPS.map((value) => (
-                  <button key={value} className="button button--secondary button--compact" type="button" onClick={() => requestTopUp(value)} disabled={!isLive}>
-                    +{formatCents(value)}
-                  </button>
-                ))}
-              </div>
-              <span className="wallet-topups__hint text-muted">Quickly add funds before the next round begins.</span>
-
-              <div className="wallet-targets">
-                <div className="wallet-targets__header">
-                  <span>Crash multipliers</span>
-                  <button className="button button--muted button--compact" type="button" onClick={resetTargetsToRound} disabled={!crashRound}>Reset</button>
-                </div>
-                <div className="wallet-targets__inputs">
-                  <div className="wallet-targets__input">
-                    <label htmlFor="target-a">Side A</label>
-                    <input id="target-a" type="number" inputMode="decimal" min={1} step={0.01}
-                      value={targetInputs.A}
-                      onChange={(e) => setTargetInputs((prev) => ({ ...prev, A: e.target.value }))}
-                      onBlur={(e) => {
-                        const parsed = Number.parseFloat(e.target.value);
-                        setTargetInputs((prev) => ({ ...prev, A: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
-                      }}
-                      disabled={!canEditTargets}
-                    />
-                  </div>
-                  <div className="wallet-targets__input">
-                    <label htmlFor="target-b">Side B</label>
-                    <input id="target-b" type="number" inputMode="decimal" min={1} step={0.01}
-                      value={targetInputs.B}
-                      onChange={(e) => setTargetInputs((prev) => ({ ...prev, B: e.target.value }))}
-                      onBlur={(e) => {
-                        const parsed = Number.parseFloat(e.target.value);
-                        setTargetInputs((prev) => ({ ...prev, B: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
-                      }}
-                      disabled={!canEditTargets}
-                    />
-                  </div>
-                </div>
-                <div className="wallet-targets__foot">
-                  {crashRound ? (
-                    <>
-                      <span className="wallet-targets__round">Round · A {formatMultiplier(crashRound.targetA)} · B {formatMultiplier(crashRound.targetB)}</span>
-                      <span className="wallet-targets__delta">
-                        Plan offset:&nbsp;
-                        <strong>A {targetOffsets.A != null ? formatMultiplierDelta(targetOffsets.A) : '—'}</strong>
-                        <span className="wallet-targets__divider">·</span>
-                        <strong>B {targetOffsets.B != null ? formatMultiplierDelta(targetOffsets.B) : '—'}</strong>
-                      </span>
-                    </>
-                  ) : (
-                    <Badge tone="muted">Targets available in Crash Dual mode</Badge>
-                  )}
-                </div>
-              </div>
-
-              <div className="wallet-metrics">
-                <MetricRow label="UID" value={uid.current || '—'} align="start" />
-                <MetricRow label="Active mode" value={<Badge tone="primary">{modeLabel}</Badge>} hint={`Phase ${activePhase ?? '—'}`} align="start" />
-                <MetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} align="start" />
-                <MetricRow label="RTP (avg)" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} hint="House rolling average" />
-                <MetricRow label="Risk status" value={<Badge tone={riskProfile.tone}>{riskProfile.label}</Badge>} hint={riskProfile.hint} align="start" />
-                <MetricRow label="Rounds played" value={snap?.rounds ?? 0} />
-              </div>
-            </Card>
-
-            <Card title="Main bet" subtitle="Place wagers on the active game">
-              <div className="control-group">
-                <label htmlFor="bet-amount">Bet amount</label>
-                <input id="bet-amount" type="number" min={0} value={amount}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    setAmount(Number.isFinite(next) ? Math.max(0, next) : 0);
-                  }}
-                />
-              </div>
-
-              <div className="bet-stepper">
-                <button className="button button--muted button--compact" type="button" onClick={() => adjustAmount(-sliderStep)} disabled={sanitizedAmount <= 0}>−{formatCents(sliderStep)}</button>
-                <span className="bet-stepper__value">{formatCents(sanitizedAmount)}</span>
-                <button className="button button--secondary button--compact" type="button" onClick={() => adjustAmount(sliderStep)} disabled={wallet <= 0}>+{formatCents(sliderStep)}</button>
-              </div>
-
-              <div className="bet-presets">
-                {BET_PRESETS.map((value) => (
-                  <button key={value} className="button button--muted button--compact" type="button"
-                    data-active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
-                    onClick={() => setAmount(wallet > 0 ? Math.min(value, wallet) : value)}
-                  >
-                    {formatCents(value)}
-                  </button>
-                ))}
-              </div>
-
-              <div className="bet-slider">
-                <label htmlFor="bet-slider">Quick adjust</label>
-                <input id="bet-slider" type="range" min={0} max={sliderMax} step={sliderStep} value={sanitizedAmount}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    if (!Number.isFinite(next)) return;
-                    const normalized = Math.max(0, Math.round(next));
-                    setAmount(wallet > 0 ? Math.min(normalized, wallet) : normalized);
-                  }}
-                  disabled={sliderDisabled}
-                />
-                <div className="bet-slider__scale">
-                  <span>{formatCents(0)}</span>
-                  <span>{formatCents(sliderMax)}</span>
-                </div>
-              </div>
-
-              <div className="bet-side-overview">
-                <div className="bet-side-chip" data-side={side}>
-                  <span className="bet-side-chip__label">Selected</span>
-                  <span className="bet-side-chip__value">Side {side}</span>
-                  {mode === 'crash_dual' && <span className="bet-side-chip__plan">Target · {activeTargetPlan != null ? formatMultiplier(activeTargetPlan) : '—'}</span>}
-                </div>
-                <div className="bet-side-actions">
-                  <button className="button button--muted button--compact" type="button" data-active={side === 'A'} onClick={() => setSide('A')}>A</button>
-                  <button className="button button--muted button--compact" type="button" data-active={side === 'B'} onClick={() => setSide('B')}>B</button>
-                  <button className="button button--secondary button--compact" type="button" onClick={toggleSide}>Swap</button>
-                </div>
-              </div>
-
-              <div className="button-row">
-                <button className="button button--primary" type="button" onClick={placeBet} disabled={!canPlaceBet}>Place bet</button>
-                {mode === 'crash_dual' && <button className="button button--secondary" type="button" onClick={cashout} disabled={!canCashout}>Cash out</button>}
-              </div>
-              <span className="text-muted">Betting is available during the betting phase.</span>
-            </Card>
-
-            <Card title="Micro-bets" subtitle="Fine-tune duel combatants">
-              <div className="control-group">
-                <label htmlFor="micro-step">Adjustment step</label>
-                <input id="micro-step" type="number" min={1} value={microStep}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    setMicroStep(Number.isFinite(next) ? Math.max(1, Math.min(50, Math.floor(next))) : 1);
-                  }}
-                />
-              </div>
-              {!canAdjustMicro && <Badge tone="warning">Switch to duel mode to adjust stats</Badge>}
-              <div className="micro-grid">
-                {(['A', 'B'] as const).map((target) => (
-                  <div key={target} className="micro-side">
-                    <div className="micro-side-header"><Badge tone="secondary">Side {target}</Badge></div>
-                    <div className="micro-stat">
-                      <MetricRow label="Speed" value={duelRound?.micro?.[target]?.speed ?? 0} />
-                      <div className="micro-controls">
-                        <button className="button button--secondary" type="button" onClick={() => adjustMicro(target, 'speed', microStep)} disabled={!canAdjustMicro}>+{microStep}</button>
-                        <button className="button button--muted" type="button" onClick={() => adjustMicro(target, 'speed', -microStep)} disabled={!canAdjustMicro}>-{microStep}</button>
-                      </div>
-                    </div>
-                    <div className="micro-stat">
-                      <MetricRow label="Defense" value={duelRound?.micro?.[target]?.defense ?? 0} />
-                      <div className="micro-controls">
-                        <button className="button button--secondary" type="button" onClick={() => adjustMicro(target, 'defense', microStep)} disabled={!canAdjustMicro}>+{microStep}</button>
-                        <button className="button button--muted" type="button" onClick={() => adjustMicro(target, 'defense', -microStep)} disabled={!canAdjustMicro}>-{microStep}</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+          <div className="layout">
+            {COLUMN_KEYS.map((column) => (
+              <ColumnSection key={column} column={column} />
+            ))}
           </div>
-
-          {/* CENTER COLUMN */}
-          <div className="column column-center">
-            <Card title="Game arena" subtitle={modeLabel} bodyClassName="arena-body">
-              <div className="arena-grid">
-                <div className="arena-stage">
-                  {mode === 'crash_dual' && crashRound && (
-                    <CrashDualCanvas
-                      mA={crashRound.mA}
-                      mB={crashRound.mB}
-                      targetA={crashRound.targetA}
-                      targetB={crashRound.targetB}
-                      phase={crashRound.phase}
-                    />
-                  )}
-                  {mode === 'duel_ab' && duelRound && (
-                    <DuelABPanel micro={duelRound.micro} phase={duelRound.phase} winner={duelRound.winner} />
-                  )}
-                  {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
-                    <div className="arena-empty">No round data yet</div>
-                  )}
-                </div>
-                <aside className="arena-sidebar">
-                  <div className="arena-sidebar-title">Round parameters</div>
-                  <div className="arena-parameters">
-                    {parameterMetrics.length === 0 && <span className="text-muted">Waiting for round data…</span>}
-                    {parameterMetrics.map((metric) => (
-                      <MetricRow key={String(metric.label)} label={metric.label} value={metric.value} hint={metric.hint} />
-                    ))}
-                  </div>
-                </aside>
-              </div>
-            </Card>
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div className="column column-right">
-            <Card title="Investor panel" subtitle="House overview">
-              <MetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} hint={isLive ? 'Realtime updates active' : 'Reconnect to resume updates'} />
-              <MetricRow label="Bankroll" value={formatCents(snap?.bankroll ?? 0)} />
-              <MetricRow label="Jackpot" value={formatCents(snap?.jackpot ?? 0)} />
-              <MetricRow label="RTP average" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} />
-              <MetricRow label="Total rounds" value={snap?.rounds ?? 0} />
-            </Card>
-
-            <Card title="Round statistics" subtitle="Performance snapshot">
-              <MetricRow label="Completed rounds" value={roundStats?.totalRounds ?? snap?.rounds ?? 0} />
-              <MetricRow label="Crash rounds" value={roundStats?.crashRounds ?? 0} />
-              <MetricRow label="Duel rounds" value={roundStats?.duelRounds ?? 0} />
-              <MetricRow label="Total wagers" value={formatCents(roundStats?.totalWagered ?? 0)} />
-              <MetricRow label="Operator profit" value={formatCents(roundStats?.operatorProfit ?? 0)} />
-              <MetricRow label="Operator edge" value={formatPercent(roundStats?.operatorEdge ?? 0)} hint={`Target ${formatPercent(roundStats?.operatorEdgeTarget ?? 4)}`} />
-            </Card>
-
-            <Card title="Round totals" subtitle={`${modeLabel} pools`}>
-              {mode === 'crash_dual' && crashRound && (
-                <>
-                  <MetricRow label="Total pool" value={formatCents(crashTotals.totalA + crashTotals.totalB)} />
-                  <MetricRow label="Side A" value={formatCents(crashTotals.totalA)} hint={`${crashTotals.countA} bets`} />
-                  <MetricRow label="Side B" value={formatCents(crashTotals.totalB)} hint={`${crashTotals.countB} bets`} />
-                  <MetricRow label="Burned" value={formatCents(crashRound.burned)} />
-                  <MetricRow label="Payouts" value={formatCents(crashRound.payouts)} />
-                </>
-              )}
-              {mode === 'duel_ab' && duelRound && (
-                <>
-                  <MetricRow label="Total pot" value={formatCents(duelTotals.total)} />
-                  <MetricRow label="Side A" value={formatCents(duelTotals.totalA)} hint={`${duelTotals.countA} bets`} />
-                  <MetricRow label="Side B" value={formatCents(duelTotals.totalB)} hint={`${duelTotals.countB} bets`} />
-                  <MetricRow label="Winner" value={duelRound.winner ?? '—'} />
-                </>
-              )}
-              {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && <span className="text-muted">Totals will appear when a round begins.</span>}
-            </Card>
-
-            <Card title="Events" subtitle="Latest activity">
-              {events.length === 0 ? (
-                <span className="text-muted">No events yet. Place a bet to get started.</span>
-              ) : (
-                <ul className="event-list">
-                  {events.map((entry) => (
-                    <li key={entry.id} className="event-item">
-                      <span className="event-time">{eventTime(entry.ts)}</span>
-                      <span className="event-text">{entry.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
-        </div>
+        </DndContext>
       </main>
 
       <footer className="app-footer">
