@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import {
   DndContext,
   type DragEndEvent,
@@ -23,7 +23,7 @@ import { createWS, persistUid } from './ws';
 import type { GameMode, RoundStats, Side, Snapshot } from './types';
 import { Card, CardBody } from './ui/Card';
 import { Badge, type BadgeTone } from './ui/Badge';
-import { MetricRow, MutedText } from './ui/MetricRow';
+import { MetricRow, MetricValue, MutedText } from './ui/MetricRow';
 
 interface EventEntry {
   id: string;
@@ -62,6 +62,897 @@ const ArenaCardBody = styled(CardBody)`
   gap: var(--gap-lg);
 `;
 
+const AppShell = styled.div`
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(14px);
+`;
+
+const Header = styled.header`
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 340px) minmax(0, 260px);
+  gap: clamp(18px, 3vw, 32px);
+  padding: clamp(28px, 5vw, 48px);
+  background: var(--color-header);
+  border-bottom: 1px solid var(--color-header-border);
+  box-shadow: var(--shadow-header);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(18px);
+
+  @media (max-width: 1400px) {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.9fr);
+    padding-inline: clamp(32px, 6vw, 48px);
+  }
+
+  @media (max-width: 1180px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: clamp(16px, 3vw, 24px);
+  }
+
+  @media (max-width: 1040px) {
+    grid-template-columns: minmax(0, 1fr);
+    position: static;
+    padding-inline: clamp(22px, 6vw, 36px);
+    row-gap: clamp(16px, 3vw, 24px);
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 18px;
+  }
+`;
+
+const headerPanelStyles = css`
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: clamp(20px, 2.3vw, 28px);
+
+  @media (max-width: 640px) {
+    padding: 20px;
+  }
+`;
+
+const HeaderTitle = styled.div`
+  ${headerPanelStyles};
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--gap-md);
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 85% 20%, var(--color-secondary-soft), transparent 55%);
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(26px, 3.6vw, 34px);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--color-heading);
+
+    @media (max-width: 640px) {
+      font-size: 22px;
+    }
+  }
+`;
+
+const HeaderLogo = styled.div`
+  width: clamp(58px, 6vw, 72px);
+  height: clamp(58px, 6vw, 72px);
+  border-radius: 22px;
+  background: var(--color-logo);
+  display: grid;
+  place-items: center;
+  font-size: clamp(24px, 3vw, 30px);
+  color: var(--color-logo-ink);
+  box-shadow: var(--shadow-logo);
+
+  @media (max-width: 640px) {
+    width: 56px;
+    height: 56px;
+  }
+`;
+
+const HeaderCopy = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const HeaderEyebrow = styled.span`
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+`;
+
+const HeaderLead = styled.p`
+  margin: 0;
+  font-size: clamp(14px, 1.6vw, 16px);
+  line-height: 1.6;
+  color: var(--color-muted);
+  max-width: 42ch;
+
+  @media (max-width: 640px) {
+    font-size: 13px;
+  }
+`;
+
+const HeaderBadges = styled.div`
+  ${headerPanelStyles};
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+`;
+
+const HeaderBadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+`;
+
+const HeaderHint = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+`;
+
+const HeaderControls = styled.div`
+  ${headerPanelStyles};
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+  align-items: stretch;
+
+  @media (max-width: 1180px) {
+    grid-column: span 2;
+  }
+`;
+
+const HeaderControlsGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+`;
+
+const HeaderControlsLabel = styled.span`
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+`;
+
+const HeaderControlsHint = styled.p`
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-faint);
+`;
+
+const Segmented = styled.div`
+  display: inline-flex;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-strong);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-segmented);
+  gap: 6px;
+`;
+
+const HeaderSegmented = styled(Segmented)`
+  width: 100%;
+  justify-content: space-between;
+
+  @media (max-width: 1180px) {
+    justify-content: flex-start;
+  }
+`;
+
+const SegmentedButton = styled.button<{ $active?: boolean }>`
+  border-radius: calc(var(--radius-md) - 4px);
+  background: ${({ $active }) => ($active ? 'var(--segmented-active-bg)' : 'transparent')};
+  border: 0;
+  padding: 10px 16px;
+  color: ${({ $active }) => ($active ? 'var(--segmented-active-color)' : 'var(--color-muted)')};
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  ${({ $active }) =>
+    $active &&
+    css`
+      box-shadow: var(--segmented-active-shadow);
+    `}
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+`;
+
+const Main = styled.main`
+  --layout-max-width: 1640px;
+  --layout-gutter: clamp(28px, 5vw, 48px);
+  --layout-column-gap: clamp(24px, 4vw, 36px);
+  flex: 1;
+  width: min(100%, var(--layout-max-width));
+  padding: clamp(40px, 6vw, 80px) 0 clamp(64px, 8vw, 108px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(32px, 5vw, 48px);
+
+  @media (max-width: 640px) {
+    padding-block: 28px 40px;
+  }
+`;
+
+const IntroSection = styled.section`
+  width: min(100%, var(--layout-max-width));
+  margin: 0 auto;
+  padding: clamp(24px, 3vw, 36px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.45fr);
+  gap: clamp(18px, 3vw, 32px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+
+  @media (max-width: 1400px) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  @media (max-width: 1040px) {
+    margin-inline: clamp(22px, 7vw, 36px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (max-width: 780px) {
+    margin-inline: clamp(18px, 8vw, 28px);
+  }
+
+  @media (max-width: 640px) {
+    padding: 20px;
+    gap: var(--gap-md);
+  }
+`;
+
+const IntroCopy = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  h2 {
+    margin: 0;
+    font-size: clamp(22px, 3vw, 28px);
+    font-weight: 700;
+    color: var(--color-heading);
+    letter-spacing: 0.02em;
+  }
+
+  p {
+    margin: 0;
+    font-size: clamp(14px, 1.4vw, 16px);
+    line-height: 1.6;
+    color: var(--color-muted);
+  }
+`;
+
+const Summary = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: clamp(12px, 2.5vw, 18px);
+
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+`;
+
+const SummaryItem = styled.div`
+  background: var(--color-surface-strong);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-summary-border);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-summary);
+`;
+
+const SummaryLabel = styled.span`
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+`;
+
+const SummaryValue = styled.span`
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-heading);
+`;
+
+const Layout = styled.div`
+  width: min(100%, var(--layout-max-width));
+  margin: 0 auto;
+  padding: 0 var(--layout-gutter) 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-lg);
+`;
+
+const Column = styled.div<{ $isDropping?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-lg);
+  min-width: 0;
+  position: relative;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+`;
+
+const ColumnPlaceholder = styled.div`
+  pointer-events: none;
+  min-height: 1px;
+`;
+
+const draggablePanelStyles = css`
+  cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  will-change: transform;
+  width: 100%;
+  max-width: 700px;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-secondary);
+    outline-offset: 6px;
+  }
+`;
+
+const DraggablePanel = styled.div<{ $isDragging?: boolean; $isSorting?: boolean }>`
+  ${draggablePanelStyles};
+  ${({ $isDragging }) =>
+    $isDragging &&
+    css`
+      cursor: grabbing;
+      opacity: 0.9;
+      box-shadow: var(--shadow-strong);
+      z-index: 5;
+    `}
+`;
+
+const buttonBaseStyles = css`
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--button-text);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    filter: saturate(0.75) brightness(0.85);
+    opacity: 0.7;
+  }
+`;
+
+const Button = styled.button<{
+  $variant?: 'primary' | 'secondary' | 'muted';
+  $compact?: boolean;
+  $active?: boolean;
+}>`
+  ${buttonBaseStyles};
+  ${({ $variant = 'muted' }) => {
+    switch ($variant) {
+      case 'primary':
+        return css`
+          background: var(--button-primary-bg);
+          box-shadow: var(--button-primary-shadow);
+        `;
+      case 'secondary':
+        return css`
+          background: var(--button-secondary-bg);
+          box-shadow: var(--button-secondary-shadow);
+        `;
+      default:
+        return css`
+          background: var(--button-muted-bg);
+          color: var(--button-muted-text);
+          box-shadow: var(--button-muted-shadow);
+        `;
+    }
+  }};
+
+  ${({ $compact }) =>
+    $compact &&
+    css`
+      padding: 6px 12px;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    `}
+
+  ${({ $active }) =>
+    $active &&
+    css`
+      background: var(--segmented-active-bg);
+      color: var(--segmented-active-color);
+      box-shadow: var(--segmented-active-shadow);
+    `}
+`;
+
+const ControlGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const ControlLabel = styled.label`
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+`;
+
+const ButtonRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+`;
+
+const WalletBalance = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const WalletBalanceLabel = styled.span`
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+`;
+
+const WalletBalanceValue = styled.div`
+  font-size: clamp(28px, 3.5vw, 38px);
+  font-weight: 700;
+  color: var(--color-heading);
+  text-shadow: var(--shadow-balance);
+`;
+
+const WalletBalanceTags = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+`;
+
+const WalletTopups = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+
+  ${Button} {
+    flex: 1 0 100px;
+    min-width: 96px;
+  }
+`;
+
+const WalletTopupsHint = styled(MutedText)`
+  font-size: 12px;
+`;
+
+const WalletTargets = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  background: var(--color-panel);
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-panel);
+`;
+
+const WalletTargetsHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+`;
+
+const WalletTargetsInputs = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--gap-sm);
+`;
+
+const WalletTargetsInput = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-muted);
+  }
+`;
+
+const WalletTargetsFoot = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-muted);
+`;
+
+const WalletTargetsRound = styled.span`
+  font-weight: 600;
+  color: var(--color-heading);
+`;
+
+const WalletTargetsDelta = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  strong {
+    font-weight: 600;
+    color: var(--color-heading);
+  }
+`;
+
+const WalletTargetsDivider = styled.span`
+  color: var(--color-faint);
+`;
+
+const WalletMetrics = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--gap-sm);
+`;
+
+const WalletMetricRow = styled(MetricRow)`
+  background: var(--color-panel-alt);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  border: 1px solid var(--color-panel-border-strong);
+
+  ${MetricValue} {
+    text-align: left;
+  }
+`;
+
+const BetStepper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  justify-content: space-between;
+`;
+
+const BetStepperValue = styled.span`
+  flex: 1;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-heading);
+`;
+
+const BetPresets = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+
+  ${Button} {
+    flex: 1 0 100px;
+    min-width: 96px;
+  }
+`;
+
+const BetSlider = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const BetSliderScale = styled.div`
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-muted);
+`;
+
+const BetSideOverview = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const BetSideChip = styled.div<{ $side: Side }>`
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid ${({ $side }) => ($side === 'A' ? 'var(--color-side-a-border)' : 'var(--color-side-b-border)')};
+  background: var(--color-panel);
+  box-shadow: var(--shadow-panel-strong);
+  min-width: 160px;
+`;
+
+const BetSideChipLabel = styled.span`
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+`;
+
+const BetSideChipValue = styled.span`
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-heading);
+`;
+
+const BetSideChipPlan = styled.span`
+  font-size: 12px;
+  color: var(--color-secondary);
+`;
+
+const BetSideActions = styled.div`
+  display: flex;
+  gap: var(--gap-sm);
+  align-items: center;
+`;
+
+const MicroGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-md);
+
+  @media (max-width: 1040px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
+
+const MicroSide = styled.div`
+  background: var(--color-panel);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-panel-border);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+  box-shadow: var(--shadow-panel-strong);
+`;
+
+const MicroSideHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const MicroStat = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+`;
+
+const MicroControls = styled.div`
+  display: flex;
+  gap: var(--gap-sm);
+`;
+
+const ArenaGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+  gap: var(--gap-lg);
+
+  @media (max-width: 1040px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
+
+const ArenaStage = styled.div`
+  background: var(--color-surface-strong);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  box-shadow: var(--shadow-strong);
+  padding: 20px;
+
+  canvas {
+    width: 900px;
+    height: 460px;
+    border-radius: calc(var(--radius-lg) - 6px);
+    border: 1px solid var(--color-canvas-border);
+    background: var(--color-canvas);
+  }
+`;
+
+const ArenaEmpty = styled.div`
+  color: var(--color-muted);
+  font-size: 14px;
+`;
+
+const ArenaSidebar = styled.aside`
+  background: var(--color-surface-strong);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-soft);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+`;
+
+const ArenaSidebarTitle = styled.div`
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+`;
+
+const ArenaParameters = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+`;
+
+const EventList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  max-height: 280px;
+  overflow-y: auto;
+`;
+
+const EventItem = styled.li`
+  background: var(--color-event);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-event-border);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const EventTime = styled.span`
+  font-size: 11px;
+  color: var(--color-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+`;
+
+const EventText = styled.span`
+  font-size: 13px;
+  color: var(--color-heading);
+`;
+
+const AppFooter = styled.footer`
+  padding: clamp(20px, 4vw, 32px) clamp(28px, 6vw, 64px) clamp(32px, 6vw, 48px);
+  background: var(--color-footer);
+  border-top: 1px solid var(--color-footer-border);
+  box-shadow: var(--shadow-footer);
+`;
+
+const AppFooterInner = styled.div`
+  max-width: min(1680px, 50%);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(10px, 2.5vw, 18px);
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+
+  @media (max-width: 1040px) {
+    justify-content: center;
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    text-align: left;
+  }
+`;
+
+const AppFooterBrand = styled.span`
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-heading);
+`;
+
+const AppFooterNote = styled.span`
+  flex: 1 1 240px;
+  font-size: 13px;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-muted);
+
+  @media (max-width: 640px) {
+    font-size: 12px;
+  }
+`;
+
+const BuildIndicator = styled.div`
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--color-surface-strong);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 18px 40px rgba(6, 10, 26, 0.35);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+`;
+
+const BuildIndicatorCommit = styled.span`
+  color: var(--color-secondary);
+  font-weight: 600;
+`;
+
 const generateBetId = () => {
   const globalCrypto = typeof globalThis !== 'undefined' ? (globalThis as { crypto?: Crypto }).crypto : undefined;
   if (globalCrypto?.randomUUID) {
@@ -81,10 +972,6 @@ type PanelId = 'wallet' | 'bet' | 'micro' | 'arena' | 'investor' | 'stats' | 'to
 type Layout = Record<ColumnKey, PanelId[]>;
 
 const PANEL_IDS: readonly PanelId[] = ['wallet', 'bet', 'micro', 'arena', 'investor', 'stats', 'totals', 'events'];
-
-const COLUMN_CLASSNAMES: Record<ColumnKey, string> = {
-  main: 'column column-main'
-};
 
 const initialLayout: Layout = {
   main: ['wallet', 'bet', 'micro', 'arena', 'investor', 'stats', 'totals', 'events']
@@ -150,22 +1037,17 @@ function SortablePanel({ id, children }: { id: PanelId; children: React.ReactNod
     touchAction: 'manipulation'
   };
 
-  if (isDragging) {
-    style.zIndex = 5;
-  }
-
   return (
-    <div
+    <DraggablePanel
       ref={setNodeRef}
       style={style}
-      className="draggable-panel"
-      data-dragging={isDragging || undefined}
-      data-sorting={isSorting || undefined}
+      $isDragging={isDragging}
+      $isSorting={isSorting}
       {...attributes}
       {...listeners}
     >
       {children}
-    </div>
+    </DraggablePanel>
   );
 }
 
@@ -506,44 +1388,40 @@ export default function App() {
   const renderWalletCard = () => (
     <Card title="Wallet &amp; Mode" subtitle="Session overview">
       <CardBody>
-        <div className="wallet-balance">
-          <span className="wallet-balance__label">Balance</span>
-          <div className="wallet-balance__value">{formatCents(wallet)}</div>
-          <div className="wallet-balance__tags">
+        <WalletBalance>
+          <WalletBalanceLabel>Balance</WalletBalanceLabel>
+          <WalletBalanceValue>{formatCents(wallet)}</WalletBalanceValue>
+          <WalletBalanceTags>
             <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
             <Badge tone={riskProfile.tone}>Risk · {riskProfile.label}</Badge>
-          </div>
-        </div>
+          </WalletBalanceTags>
+        </WalletBalance>
 
-        <div className="wallet-topups">
+        <WalletTopups>
           {QUICK_TOPUPS.map((value) => (
-            <button
+            <Button
               key={value}
-              className="button button--secondary button--compact"
               type="button"
+              $variant="secondary"
+              $compact
               onClick={() => requestTopUp(value)}
               disabled={!isLive}
             >
               +{formatCents(value)}
-            </button>
+            </Button>
           ))}
-        </div>
-        <MutedText className="wallet-topups__hint">Quickly add funds before the next round begins.</MutedText>
+        </WalletTopups>
+        <WalletTopupsHint>Quickly add funds before the next round begins.</WalletTopupsHint>
 
-        <div className="wallet-targets">
-          <div className="wallet-targets__header">
+        <WalletTargets>
+          <WalletTargetsHeader>
             <span>Crash multipliers</span>
-            <button
-              className="button button--muted button--compact"
-              type="button"
-              onClick={resetTargetsToRound}
-              disabled={!crashRound}
-            >
+            <Button type="button" $variant="muted" $compact onClick={resetTargetsToRound} disabled={!crashRound}>
               Reset
-            </button>
-          </div>
-          <div className="wallet-targets__inputs">
-            <div className="wallet-targets__input">
+            </Button>
+          </WalletTargetsHeader>
+          <WalletTargetsInputs>
+            <WalletTargetsInput>
               <label htmlFor="target-a">Side A</label>
               <input
                 id="target-a"
@@ -559,8 +1437,8 @@ export default function App() {
                 }}
                 disabled={!canEditTargets}
               />
-            </div>
-            <div className="wallet-targets__input">
+            </WalletTargetsInput>
+            <WalletTargetsInput>
               <label htmlFor="target-b">Side B</label>
               <input
                 id="target-b"
@@ -576,45 +1454,45 @@ export default function App() {
                 }}
                 disabled={!canEditTargets}
               />
-            </div>
-          </div>
-          <div className="wallet-targets__foot">
+            </WalletTargetsInput>
+          </WalletTargetsInputs>
+          <WalletTargetsFoot>
             {crashRound ? (
               <>
-                <span className="wallet-targets__round">
+                <WalletTargetsRound>
                   Round · A {formatMultiplier(crashRound.targetA)} · B {formatMultiplier(crashRound.targetB)}
-                </span>
-                <span className="wallet-targets__delta">
+                </WalletTargetsRound>
+                <WalletTargetsDelta>
                   Plan offset:&nbsp;
                   <strong>A {targetOffsets.A != null ? formatMultiplierDelta(targetOffsets.A) : '—'}</strong>
-                  <span className="wallet-targets__divider">·</span>
+                  <WalletTargetsDivider>·</WalletTargetsDivider>
                   <strong>B {targetOffsets.B != null ? formatMultiplierDelta(targetOffsets.B) : '—'}</strong>
-                </span>
+                </WalletTargetsDelta>
               </>
             ) : (
               <Badge tone="muted">Targets available in Crash Dual mode</Badge>
             )}
-          </div>
-        </div>
+          </WalletTargetsFoot>
+        </WalletTargets>
 
-        <div className="wallet-metrics">
-          <MetricRow label="UID" value={uid.current || '—'} align="start" />
-          <MetricRow
+        <WalletMetrics>
+          <WalletMetricRow label="UID" value={uid.current || '—'} align="start" />
+          <WalletMetricRow
             label="Active mode"
             value={<Badge tone="primary">{modeLabel}</Badge>}
             hint={`Phase ${activePhase ?? '—'}`}
             align="start"
           />
-          <MetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} align="start" />
-          <MetricRow label="RTP (avg)" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} hint="House rolling average" />
-          <MetricRow
+          <WalletMetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} align="start" />
+          <WalletMetricRow label="RTP (avg)" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} hint="House rolling average" />
+          <WalletMetricRow
             label="Risk status"
             value={<Badge tone={riskProfile.tone}>{riskProfile.label}</Badge>}
             hint={riskProfile.hint}
             align="start"
           />
-          <MetricRow label="Rounds played" value={snap?.rounds ?? 0} />
-        </div>
+          <WalletMetricRow label="Rounds played" value={snap?.rounds ?? 0} />
+        </WalletMetrics>
       </CardBody>
     </Card>
   );
@@ -622,8 +1500,8 @@ export default function App() {
   const renderBetCard = () => (
     <Card title="Main bet" subtitle="Place wagers on the active game">
       <CardBody>
-        <div className="control-group">
-          <label htmlFor="bet-amount">Bet amount</label>
+        <ControlGroup>
+          <ControlLabel htmlFor="bet-amount">Bet amount</ControlLabel>
           <input
             id="bet-amount"
             type="number"
@@ -634,44 +1512,47 @@ export default function App() {
               setAmount(Number.isFinite(next) ? Math.max(0, next) : 0);
             }}
           />
-        </div>
+        </ControlGroup>
 
-        <div className="bet-stepper">
-          <button
-            className="button button--muted button--compact"
+        <BetStepper>
+          <Button
             type="button"
+            $variant="muted"
+            $compact
             onClick={() => adjustAmount(-sliderStep)}
             disabled={sanitizedAmount <= 0}
           >
             −{formatCents(sliderStep)}
-          </button>
-          <span className="bet-stepper__value">{formatCents(sanitizedAmount)}</span>
-          <button
-            className="button button--secondary button--compact"
+          </Button>
+          <BetStepperValue>{formatCents(sanitizedAmount)}</BetStepperValue>
+          <Button
             type="button"
+            $variant="secondary"
+            $compact
             onClick={() => adjustAmount(sliderStep)}
             disabled={wallet <= 0}
           >
             +{formatCents(sliderStep)}
-          </button>
-        </div>
+          </Button>
+        </BetStepper>
 
-        <div className="bet-presets">
+        <BetPresets>
           {BET_PRESETS.map((value) => (
-            <button
+            <Button
               key={value}
-              className="button button--muted button--compact"
               type="button"
-              data-active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
+              $variant="muted"
+              $compact
+              $active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
               onClick={() => setAmount(wallet > 0 ? Math.min(value, wallet) : value)}
             >
               {formatCents(value)}
-            </button>
+            </Button>
           ))}
-        </div>
+        </BetPresets>
 
-        <div className="bet-slider">
-          <label htmlFor="bet-slider">Quick adjust</label>
+        <BetSlider>
+          <ControlLabel htmlFor="bet-slider">Quick adjust</ControlLabel>
           <input
             id="bet-slider"
             type="range"
@@ -687,45 +1568,45 @@ export default function App() {
             }}
             disabled={sliderDisabled}
           />
-          <div className="bet-slider__scale">
+          <BetSliderScale>
             <span>{formatCents(0)}</span>
             <span>{formatCents(sliderMax)}</span>
-          </div>
-        </div>
+          </BetSliderScale>
+        </BetSlider>
 
-        <div className="bet-side-overview">
-          <div className="bet-side-chip" data-side={side}>
-            <span className="bet-side-chip__label">Selected</span>
-            <span className="bet-side-chip__value">Side {side}</span>
+        <BetSideOverview>
+          <BetSideChip $side={side}>
+            <BetSideChipLabel>Selected</BetSideChipLabel>
+            <BetSideChipValue>Side {side}</BetSideChipValue>
             {mode === 'crash_dual' && (
-              <span className="bet-side-chip__plan">
+              <BetSideChipPlan>
                 Target · {activeTargetPlan != null ? formatMultiplier(activeTargetPlan) : '—'}
-              </span>
+              </BetSideChipPlan>
             )}
-          </div>
-          <div className="bet-side-actions">
-            <button className="button button--muted button--compact" type="button" data-active={side === 'A'} onClick={() => setSide('A')}>
+          </BetSideChip>
+          <BetSideActions>
+            <Button type="button" $variant="muted" $compact $active={side === 'A'} onClick={() => setSide('A')}>
               A
-            </button>
-            <button className="button button--muted button--compact" type="button" data-active={side === 'B'} onClick={() => setSide('B')}>
+            </Button>
+            <Button type="button" $variant="muted" $compact $active={side === 'B'} onClick={() => setSide('B')}>
               B
-            </button>
-            <button className="button button--secondary button--compact" type="button" onClick={toggleSide}>
+            </Button>
+            <Button type="button" $variant="secondary" $compact onClick={toggleSide}>
               Swap
-            </button>
-          </div>
-        </div>
+            </Button>
+          </BetSideActions>
+        </BetSideOverview>
 
-        <div className="button-row">
-          <button className="button button--primary" type="button" onClick={placeBet} disabled={!canPlaceBet}>
+        <ButtonRow>
+          <Button type="button" $variant="primary" onClick={placeBet} disabled={!canPlaceBet}>
             Place bet
-          </button>
+          </Button>
           {mode === 'crash_dual' && (
-            <button className="button button--secondary" type="button" onClick={cashout} disabled={!canCashout}>
+            <Button type="button" $variant="secondary" onClick={cashout} disabled={!canCashout}>
               Cash out
-            </button>
+            </Button>
           )}
-        </div>
+        </ButtonRow>
         <MutedText>Betting is available during the betting phase.</MutedText>
       </CardBody>
     </Card>
@@ -734,8 +1615,8 @@ export default function App() {
   const renderMicroCard = () => (
     <Card title="Micro-bets" subtitle="Fine-tune duel combatants">
       <CardBody>
-        <div className="control-group">
-          <label htmlFor="micro-step">Adjustment step</label>
+        <ControlGroup>
+          <ControlLabel htmlFor="micro-step">Adjustment step</ControlLabel>
           <input
             id="micro-step"
             type="number"
@@ -746,59 +1627,59 @@ export default function App() {
               setMicroStep(Number.isFinite(next) ? Math.max(1, Math.min(50, Math.floor(next))) : 1);
             }}
           />
-        </div>
+        </ControlGroup>
         {!canAdjustMicro && <Badge tone="warning">Switch to duel mode to adjust stats</Badge>}
-        <div className="micro-grid">
+        <MicroGrid>
           {(['A', 'B'] as const).map((target) => (
-            <div key={target} className="micro-side">
-              <div className="micro-side-header">
+            <MicroSide key={target}>
+              <MicroSideHeader>
                 <Badge tone="secondary">Side {target}</Badge>
-              </div>
-              <div className="micro-stat">
+              </MicroSideHeader>
+              <MicroStat>
                 <MetricRow label="Speed" value={duelRound?.micro?.[target]?.speed ?? 0} />
-                <div className="micro-controls">
-                  <button
-                    className="button button--secondary"
+                <MicroControls>
+                  <Button
                     type="button"
+                    $variant="secondary"
                     onClick={() => adjustMicro(target, 'speed', microStep)}
                     disabled={!canAdjustMicro}
                   >
                     +{microStep}
-                  </button>
-                  <button
-                    className="button button--muted"
+                  </Button>
+                  <Button
                     type="button"
+                    $variant="muted"
                     onClick={() => adjustMicro(target, 'speed', -microStep)}
                     disabled={!canAdjustMicro}
                   >
                     -{microStep}
-                  </button>
-                </div>
-              </div>
-              <div className="micro-stat">
+                  </Button>
+                </MicroControls>
+              </MicroStat>
+              <MicroStat>
                 <MetricRow label="Defense" value={duelRound?.micro?.[target]?.defense ?? 0} />
-                <div className="micro-controls">
-                  <button
-                    className="button button--secondary"
+                <MicroControls>
+                  <Button
                     type="button"
+                    $variant="secondary"
                     onClick={() => adjustMicro(target, 'defense', microStep)}
                     disabled={!canAdjustMicro}
                   >
                     +{microStep}
-                  </button>
-                  <button
-                    className="button button--muted"
+                  </Button>
+                  <Button
                     type="button"
+                    $variant="muted"
                     onClick={() => adjustMicro(target, 'defense', -microStep)}
                     disabled={!canAdjustMicro}
                   >
                     -{microStep}
-                  </button>
-                </div>
-              </div>
-            </div>
+                  </Button>
+                </MicroControls>
+              </MicroStat>
+            </MicroSide>
           ))}
-        </div>
+        </MicroGrid>
       </CardBody>
     </Card>
   );
@@ -806,8 +1687,8 @@ export default function App() {
   const renderArenaCard = () => (
     <Card title="Game arena" subtitle={modeLabel}>
       <ArenaCardBody>
-        <div className="arena-grid">
-          <div className="arena-stage">
+        <ArenaGrid>
+          <ArenaStage>
             {mode === 'crash_dual' && crashRound && (
               <CrashDualCanvas
                 mA={crashRound.mA}
@@ -821,19 +1702,19 @@ export default function App() {
               <DuelABPanel micro={duelRound.micro} phase={duelRound.phase} winner={duelRound.winner} />
             )}
             {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
-              <div className="arena-empty">No round data yet</div>
+              <ArenaEmpty>No round data yet</ArenaEmpty>
             )}
-          </div>
-          <aside className="arena-sidebar">
-            <div className="arena-sidebar-title">Round parameters</div>
-            <div className="arena-parameters">
+          </ArenaStage>
+          <ArenaSidebar>
+            <ArenaSidebarTitle>Round parameters</ArenaSidebarTitle>
+            <ArenaParameters>
               {parameterMetrics.length === 0 && <MutedText>Waiting for round data…</MutedText>}
               {parameterMetrics.map((metric) => (
                 <MetricRow key={String(metric.label)} label={metric.label} value={metric.value} hint={metric.hint} />
               ))}
-            </div>
-          </aside>
-        </div>
+            </ArenaParameters>
+          </ArenaSidebar>
+        </ArenaGrid>
       </ArenaCardBody>
     </Card>
   );
@@ -904,14 +1785,14 @@ export default function App() {
         {events.length === 0 ? (
           <MutedText>No events yet. Place a bet to get started.</MutedText>
         ) : (
-          <ul className="event-list">
+          <EventList>
             {events.map((entry) => (
-              <li key={entry.id} className="event-item">
-                <span className="event-time">{eventTime(entry.ts)}</span>
-                <span className="event-text">{entry.text}</span>
-              </li>
+              <EventItem key={entry.id}>
+                <EventTime>{eventTime(entry.ts)}</EventTime>
+                <EventText>{entry.text}</EventText>
+              </EventItem>
             ))}
-          </ul>
+          </EventList>
         )}
       </CardBody>
     </Card>
@@ -933,7 +1814,7 @@ export default function App() {
     const columnPanels = layout[column];
 
     return (
-      <div ref={setNodeRef} className={COLUMN_CLASSNAMES[column]} data-dropping={isOver || undefined}>
+      <Column ref={setNodeRef} $isDropping={isOver}>
         <SortableContext items={columnPanels} strategy={verticalListSortingStrategy}>
           {columnPanels.map((panelId) => {
             const render = panels[panelId];
@@ -945,82 +1826,107 @@ export default function App() {
             );
           })}
         </SortableContext>
-        <div className="column-placeholder" aria-hidden="true" data-placeholder />
-      </div>
+        <ColumnPlaceholder aria-hidden="true" />
+      </Column>
     );
   };
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header__title">
-          <div className="app-header__logo" aria-hidden="true">✦</div>
-          <div className="app-header__copy">
-            <span className="app-header__eyebrow">Realtime casino sandbox</span>
+    <AppShell>
+      <Header>
+        <HeaderTitle>
+          <HeaderLogo aria-hidden="true">✦</HeaderLogo>
+          <HeaderCopy>
+            <HeaderEyebrow>Realtime casino sandbox</HeaderEyebrow>
             <h1>Clash Dual</h1>
-            <p className="app-header__lead">Balance crash flights and duel skirmishes from one cinematic control room.</p>
-          </div>
-        </div>
+            <HeaderLead>Balance crash flights and duel skirmishes from one cinematic control room.</HeaderLead>
+          </HeaderCopy>
+        </HeaderTitle>
 
-        <div className="app-header__badges">
-          <div className="app-header__badge-row">
+        <HeaderBadges>
+          <HeaderBadgeRow>
             <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
             <Badge tone="primary">Mode · {modeLabel}</Badge>
             <Badge tone={phaseTone}>Phase · {activePhase ?? '—'}</Badge>
             <Badge tone="muted">Rounds · {snap?.rounds ?? 0}</Badge>
-          </div>
-          <p className="app-header__hint">Monitor live telemetry, tweak multipliers, and launch your bets the moment the skies align.</p>
-        </div>
+          </HeaderBadgeRow>
+          <HeaderHint>Monitor live telemetry, tweak multipliers, and launch your bets the moment the skies align.</HeaderHint>
+        </HeaderBadges>
 
-        <div className="app-header__controls">
-          <div className="app-header__controls-group">
-            <span className="app-header__controls-label">Game mode</span>
-            <div className="segmented segmented--spread" role="group" aria-label="Select game mode">
-              <button className="button button--muted" type="button" data-active={mode === 'crash_dual'} onClick={() => switchMode('crash_dual')} disabled={!isLive || mode === 'crash_dual'}>
+        <HeaderControls>
+          <HeaderControlsGroup>
+            <HeaderControlsLabel>Game mode</HeaderControlsLabel>
+            <HeaderSegmented role="group" aria-label="Select game mode">
+              <SegmentedButton
+                type="button"
+                $active={mode === 'crash_dual'}
+                onClick={() => switchMode('crash_dual')}
+                disabled={!isLive || mode === 'crash_dual'}
+              >
                 Crash
-              </button>
-              <button className="button button--muted" type="button" data-active={mode === 'duel_ab'} onClick={() => switchMode('duel_ab')} disabled={!isLive || mode === 'duel_ab'}>
+              </SegmentedButton>
+              <SegmentedButton
+                type="button"
+                $active={mode === 'duel_ab'}
+                onClick={() => switchMode('duel_ab')}
+                disabled={!isLive || mode === 'duel_ab'}
+              >
                 A/B Duel
-              </button>
-            </div>
-            <p className="app-header__controls-hint">Switch modes while connected to explore both arenas.</p>
-          </div>
-        </div>
-      </header>
+              </SegmentedButton>
+            </HeaderSegmented>
+            <HeaderControlsHint>Switch modes while connected to explore both arenas.</HeaderControlsHint>
+          </HeaderControlsGroup>
+        </HeaderControls>
+      </Header>
 
-      <main className="app-main">
-        <section className="app-main__intro">
-          <div className="app-main__intro-copy">
+      <Main>
+        <IntroSection>
+          <IntroCopy>
             <h2>Command center</h2>
             <p>Choose your side, track the pools, and react instantly to shifting phases.</p>
-          </div>
-          <div className="app-main__summary">
-            <div className="app-main__summary-item"><span className="app-main__summary-label">Wallet</span><span className="app-main__summary-value">{formatCents(wallet)}</span></div>
-            <div className="app-main__summary-item"><span className="app-main__summary-label">Game mode</span><span className="app-main__summary-value">{modeLabel}</span></div>
-            <div className="app-main__summary-item"><span className="app-main__summary-label">Risk profile</span><span className="app-main__summary-value">{riskProfile.label}</span></div>
-            <div className="app-main__summary-item"><span className="app-main__summary-label">Operator edge</span><span className="app-main__summary-value">{formatPercent(roundStats?.operatorEdge ?? 0)}</span></div>
-            <div className="app-main__summary-item"><span className="app-main__summary-label">Rounds played</span><span className="app-main__summary-value">{snap?.rounds ?? 0}</span></div>
-          </div>
-        </section>
+          </IntroCopy>
+          <Summary>
+            <SummaryItem>
+              <SummaryLabel>Wallet</SummaryLabel>
+              <SummaryValue>{formatCents(wallet)}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>Game mode</SummaryLabel>
+              <SummaryValue>{modeLabel}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>Risk profile</SummaryLabel>
+              <SummaryValue>{riskProfile.label}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>Operator edge</SummaryLabel>
+              <SummaryValue>{formatPercent(roundStats?.operatorEdge ?? 0)}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>Rounds played</SummaryLabel>
+              <SummaryValue>{snap?.rounds ?? 0}</SummaryValue>
+            </SummaryItem>
+          </Summary>
+        </IntroSection>
 
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <div className="layout">
+          <Layout>
             <ColumnSection column="main" />
-          </div>
+          </Layout>
         </DndContext>
-      </main>
+      </Main>
 
-      <footer className="app-footer">
-        <div className="app-footer__inner">
-          <span className="app-footer__brand">Clash Dual playground</span>
-          <span className="app-footer__note">Simulation environment for crash and duel mechanics.</span>
-        </div>
-      </footer>
+      <AppFooter>
+        <AppFooterInner>
+          <AppFooterBrand>Clash Dual playground</AppFooterBrand>
+          <AppFooterNote>Simulation environment for crash and duel mechanics.</AppFooterNote>
+        </AppFooterInner>
+      </AppFooter>
 
-      <div className="build-indicator">
+      <BuildIndicator>
         <span>Build</span>
-        <span className="build-indicator__commit">{commit}</span>
-      </div>
-    </div>
+        <BuildIndicatorCommit>{commit}</BuildIndicatorCommit>
+      </BuildIndicator>
+    </AppShell>
   );
 }
