@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import styled from 'styled-components';
 import {
   DndContext,
   type DragEndEvent,
@@ -20,9 +21,9 @@ import CrashDualCanvas from './games/CrashDualCanvas';
 import DuelABPanel from './games/DuelABPanel';
 import { createWS, persistUid } from './ws';
 import type { GameMode, RoundStats, Side, Snapshot } from './types';
-import { Card } from './ui/Card';
+import { Card, CardBody } from './ui/Card';
 import { Badge, type BadgeTone } from './ui/Badge';
-import { MetricRow } from './ui/MetricRow';
+import { MetricRow, MutedText } from './ui/MetricRow';
 
 interface EventEntry {
   id: string;
@@ -56,6 +57,10 @@ const phaseToneMap: Record<string, BadgeTone> = {
 
 const QUICK_TOPUPS = [500, 1_000, 2_500, 5_000, 10_000, 25_000];
 const BET_PRESETS = [500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000];
+
+const ArenaCardBody = styled(CardBody)`
+  gap: var(--gap-lg);
+`;
 
 const generateBetId = () => {
   const globalCrypto = typeof globalThis !== 'undefined' ? (globalThis as { crypto?: Crypto }).crypto : undefined;
@@ -500,399 +505,415 @@ export default function App() {
 
   const renderWalletCard = () => (
     <Card title="Wallet &amp; Mode" subtitle="Session overview">
-      <div className="wallet-balance">
-        <span className="wallet-balance__label">Balance</span>
-        <div className="wallet-balance__value">{formatCents(wallet)}</div>
-        <div className="wallet-balance__tags">
-          <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
-          <Badge tone={riskProfile.tone}>Risk · {riskProfile.label}</Badge>
-        </div>
-      </div>
-
-      <div className="wallet-topups">
-        {QUICK_TOPUPS.map((value) => (
-          <button
-            key={value}
-            className="button button--secondary button--compact"
-            type="button"
-            onClick={() => requestTopUp(value)}
-            disabled={!isLive}
-          >
-            +{formatCents(value)}
-          </button>
-        ))}
-      </div>
-      <span className="wallet-topups__hint text-muted">Quickly add funds before the next round begins.</span>
-
-      <div className="wallet-targets">
-        <div className="wallet-targets__header">
-          <span>Crash multipliers</span>
-          <button
-            className="button button--muted button--compact"
-            type="button"
-            onClick={resetTargetsToRound}
-            disabled={!crashRound}
-          >
-            Reset
-          </button>
-        </div>
-        <div className="wallet-targets__inputs">
-          <div className="wallet-targets__input">
-            <label htmlFor="target-a">Side A</label>
-            <input
-              id="target-a"
-              type="number"
-              inputMode="decimal"
-              min={1}
-              step={0.01}
-              value={targetInputs.A}
-              onChange={(e) => setTargetInputs((prev) => ({ ...prev, A: e.target.value }))}
-              onBlur={(e) => {
-                const parsed = Number.parseFloat(e.target.value);
-                setTargetInputs((prev) => ({ ...prev, A: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
-              }}
-              disabled={!canEditTargets}
-            />
-          </div>
-          <div className="wallet-targets__input">
-            <label htmlFor="target-b">Side B</label>
-            <input
-              id="target-b"
-              type="number"
-              inputMode="decimal"
-              min={1}
-              step={0.01}
-              value={targetInputs.B}
-              onChange={(e) => setTargetInputs((prev) => ({ ...prev, B: e.target.value }))}
-              onBlur={(e) => {
-                const parsed = Number.parseFloat(e.target.value);
-                setTargetInputs((prev) => ({ ...prev, B: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
-              }}
-              disabled={!canEditTargets}
-            />
+      <CardBody>
+        <div className="wallet-balance">
+          <span className="wallet-balance__label">Balance</span>
+          <div className="wallet-balance__value">{formatCents(wallet)}</div>
+          <div className="wallet-balance__tags">
+            <Badge tone={connectionTone}>Connection · {connectionLabel}</Badge>
+            <Badge tone={riskProfile.tone}>Risk · {riskProfile.label}</Badge>
           </div>
         </div>
-        <div className="wallet-targets__foot">
-          {crashRound ? (
-            <>
-              <span className="wallet-targets__round">
-                Round · A {formatMultiplier(crashRound.targetA)} · B {formatMultiplier(crashRound.targetB)}
-              </span>
-              <span className="wallet-targets__delta">
-                Plan offset:&nbsp;
-                <strong>A {targetOffsets.A != null ? formatMultiplierDelta(targetOffsets.A) : '—'}</strong>
-                <span className="wallet-targets__divider">·</span>
-                <strong>B {targetOffsets.B != null ? formatMultiplierDelta(targetOffsets.B) : '—'}</strong>
-              </span>
-            </>
-          ) : (
-            <Badge tone="muted">Targets available in Crash Dual mode</Badge>
-          )}
-        </div>
-      </div>
 
-      <div className="wallet-metrics">
-        <MetricRow label="UID" value={uid.current || '—'} align="start" />
-        <MetricRow
-          label="Active mode"
-          value={<Badge tone="primary">{modeLabel}</Badge>}
-          hint={`Phase ${activePhase ?? '—'}`}
-          align="start"
-        />
-        <MetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} align="start" />
-        <MetricRow label="RTP (avg)" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} hint="House rolling average" />
-        <MetricRow
-          label="Risk status"
-          value={<Badge tone={riskProfile.tone}>{riskProfile.label}</Badge>}
-          hint={riskProfile.hint}
-          align="start"
-        />
-        <MetricRow label="Rounds played" value={snap?.rounds ?? 0} />
-      </div>
+        <div className="wallet-topups">
+          {QUICK_TOPUPS.map((value) => (
+            <button
+              key={value}
+              className="button button--secondary button--compact"
+              type="button"
+              onClick={() => requestTopUp(value)}
+              disabled={!isLive}
+            >
+              +{formatCents(value)}
+            </button>
+          ))}
+        </div>
+        <MutedText className="wallet-topups__hint">Quickly add funds before the next round begins.</MutedText>
+
+        <div className="wallet-targets">
+          <div className="wallet-targets__header">
+            <span>Crash multipliers</span>
+            <button
+              className="button button--muted button--compact"
+              type="button"
+              onClick={resetTargetsToRound}
+              disabled={!crashRound}
+            >
+              Reset
+            </button>
+          </div>
+          <div className="wallet-targets__inputs">
+            <div className="wallet-targets__input">
+              <label htmlFor="target-a">Side A</label>
+              <input
+                id="target-a"
+                type="number"
+                inputMode="decimal"
+                min={1}
+                step={0.01}
+                value={targetInputs.A}
+                onChange={(e) => setTargetInputs((prev) => ({ ...prev, A: e.target.value }))}
+                onBlur={(e) => {
+                  const parsed = Number.parseFloat(e.target.value);
+                  setTargetInputs((prev) => ({ ...prev, A: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
+                }}
+                disabled={!canEditTargets}
+              />
+            </div>
+            <div className="wallet-targets__input">
+              <label htmlFor="target-b">Side B</label>
+              <input
+                id="target-b"
+                type="number"
+                inputMode="decimal"
+                min={1}
+                step={0.01}
+                value={targetInputs.B}
+                onChange={(e) => setTargetInputs((prev) => ({ ...prev, B: e.target.value }))}
+                onBlur={(e) => {
+                  const parsed = Number.parseFloat(e.target.value);
+                  setTargetInputs((prev) => ({ ...prev, B: Number.isFinite(parsed) ? Math.max(1, parsed).toFixed(2) : '' }));
+                }}
+                disabled={!canEditTargets}
+              />
+            </div>
+          </div>
+          <div className="wallet-targets__foot">
+            {crashRound ? (
+              <>
+                <span className="wallet-targets__round">
+                  Round · A {formatMultiplier(crashRound.targetA)} · B {formatMultiplier(crashRound.targetB)}
+                </span>
+                <span className="wallet-targets__delta">
+                  Plan offset:&nbsp;
+                  <strong>A {targetOffsets.A != null ? formatMultiplierDelta(targetOffsets.A) : '—'}</strong>
+                  <span className="wallet-targets__divider">·</span>
+                  <strong>B {targetOffsets.B != null ? formatMultiplierDelta(targetOffsets.B) : '—'}</strong>
+                </span>
+              </>
+            ) : (
+              <Badge tone="muted">Targets available in Crash Dual mode</Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="wallet-metrics">
+          <MetricRow label="UID" value={uid.current || '—'} align="start" />
+          <MetricRow
+            label="Active mode"
+            value={<Badge tone="primary">{modeLabel}</Badge>}
+            hint={`Phase ${activePhase ?? '—'}`}
+            align="start"
+          />
+          <MetricRow label="Connection" value={<Badge tone={connectionTone}>{connectionLabel}</Badge>} align="start" />
+          <MetricRow label="RTP (avg)" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} hint="House rolling average" />
+          <MetricRow
+            label="Risk status"
+            value={<Badge tone={riskProfile.tone}>{riskProfile.label}</Badge>}
+            hint={riskProfile.hint}
+            align="start"
+          />
+          <MetricRow label="Rounds played" value={snap?.rounds ?? 0} />
+        </div>
+      </CardBody>
     </Card>
   );
 
   const renderBetCard = () => (
     <Card title="Main bet" subtitle="Place wagers on the active game">
-      <div className="control-group">
-        <label htmlFor="bet-amount">Bet amount</label>
-        <input
-          id="bet-amount"
-          type="number"
-          min={0}
-          value={amount}
-          onChange={(e) => {
-            const next = Number(e.target.value);
-            setAmount(Number.isFinite(next) ? Math.max(0, next) : 0);
-          }}
-        />
-      </div>
+      <CardBody>
+        <div className="control-group">
+          <label htmlFor="bet-amount">Bet amount</label>
+          <input
+            id="bet-amount"
+            type="number"
+            min={0}
+            value={amount}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              setAmount(Number.isFinite(next) ? Math.max(0, next) : 0);
+            }}
+          />
+        </div>
 
-      <div className="bet-stepper">
-        <button
-          className="button button--muted button--compact"
-          type="button"
-          onClick={() => adjustAmount(-sliderStep)}
-          disabled={sanitizedAmount <= 0}
-        >
-          −{formatCents(sliderStep)}
-        </button>
-        <span className="bet-stepper__value">{formatCents(sanitizedAmount)}</span>
-        <button
-          className="button button--secondary button--compact"
-          type="button"
-          onClick={() => adjustAmount(sliderStep)}
-          disabled={wallet <= 0}
-        >
-          +{formatCents(sliderStep)}
-        </button>
-      </div>
-
-      <div className="bet-presets">
-        {BET_PRESETS.map((value) => (
+        <div className="bet-stepper">
           <button
-            key={value}
             className="button button--muted button--compact"
             type="button"
-            data-active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
-            onClick={() => setAmount(wallet > 0 ? Math.min(value, wallet) : value)}
+            onClick={() => adjustAmount(-sliderStep)}
+            disabled={sanitizedAmount <= 0}
           >
-            {formatCents(value)}
+            −{formatCents(sliderStep)}
           </button>
-        ))}
-      </div>
-
-      <div className="bet-slider">
-        <label htmlFor="bet-slider">Quick adjust</label>
-        <input
-          id="bet-slider"
-          type="range"
-          min={0}
-          max={sliderMax}
-          step={sliderStep}
-          value={sanitizedAmount}
-          onChange={(e) => {
-            const next = Number(e.target.value);
-            if (!Number.isFinite(next)) return;
-            const normalized = Math.max(0, Math.round(next));
-            setAmount(wallet > 0 ? Math.min(normalized, wallet) : normalized);
-          }}
-          disabled={sliderDisabled}
-        />
-        <div className="bet-slider__scale">
-          <span>{formatCents(0)}</span>
-          <span>{formatCents(sliderMax)}</span>
+          <span className="bet-stepper__value">{formatCents(sanitizedAmount)}</span>
+          <button
+            className="button button--secondary button--compact"
+            type="button"
+            onClick={() => adjustAmount(sliderStep)}
+            disabled={wallet <= 0}
+          >
+            +{formatCents(sliderStep)}
+          </button>
         </div>
-      </div>
 
-      <div className="bet-side-overview">
-        <div className="bet-side-chip" data-side={side}>
-          <span className="bet-side-chip__label">Selected</span>
-          <span className="bet-side-chip__value">Side {side}</span>
+        <div className="bet-presets">
+          {BET_PRESETS.map((value) => (
+            <button
+              key={value}
+              className="button button--muted button--compact"
+              type="button"
+              data-active={sanitizedAmount === Math.min(value, wallet > 0 ? wallet : value)}
+              onClick={() => setAmount(wallet > 0 ? Math.min(value, wallet) : value)}
+            >
+              {formatCents(value)}
+            </button>
+          ))}
+        </div>
+
+        <div className="bet-slider">
+          <label htmlFor="bet-slider">Quick adjust</label>
+          <input
+            id="bet-slider"
+            type="range"
+            min={0}
+            max={sliderMax}
+            step={sliderStep}
+            value={sanitizedAmount}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              if (!Number.isFinite(next)) return;
+              const normalized = Math.max(0, Math.round(next));
+              setAmount(wallet > 0 ? Math.min(normalized, wallet) : normalized);
+            }}
+            disabled={sliderDisabled}
+          />
+          <div className="bet-slider__scale">
+            <span>{formatCents(0)}</span>
+            <span>{formatCents(sliderMax)}</span>
+          </div>
+        </div>
+
+        <div className="bet-side-overview">
+          <div className="bet-side-chip" data-side={side}>
+            <span className="bet-side-chip__label">Selected</span>
+            <span className="bet-side-chip__value">Side {side}</span>
+            {mode === 'crash_dual' && (
+              <span className="bet-side-chip__plan">
+                Target · {activeTargetPlan != null ? formatMultiplier(activeTargetPlan) : '—'}
+              </span>
+            )}
+          </div>
+          <div className="bet-side-actions">
+            <button className="button button--muted button--compact" type="button" data-active={side === 'A'} onClick={() => setSide('A')}>
+              A
+            </button>
+            <button className="button button--muted button--compact" type="button" data-active={side === 'B'} onClick={() => setSide('B')}>
+              B
+            </button>
+            <button className="button button--secondary button--compact" type="button" onClick={toggleSide}>
+              Swap
+            </button>
+          </div>
+        </div>
+
+        <div className="button-row">
+          <button className="button button--primary" type="button" onClick={placeBet} disabled={!canPlaceBet}>
+            Place bet
+          </button>
           {mode === 'crash_dual' && (
-            <span className="bet-side-chip__plan">
-              Target · {activeTargetPlan != null ? formatMultiplier(activeTargetPlan) : '—'}
-            </span>
+            <button className="button button--secondary" type="button" onClick={cashout} disabled={!canCashout}>
+              Cash out
+            </button>
           )}
         </div>
-        <div className="bet-side-actions">
-          <button className="button button--muted button--compact" type="button" data-active={side === 'A'} onClick={() => setSide('A')}>
-            A
-          </button>
-          <button className="button button--muted button--compact" type="button" data-active={side === 'B'} onClick={() => setSide('B')}>
-            B
-          </button>
-          <button className="button button--secondary button--compact" type="button" onClick={toggleSide}>
-            Swap
-          </button>
-        </div>
-      </div>
-
-      <div className="button-row">
-        <button className="button button--primary" type="button" onClick={placeBet} disabled={!canPlaceBet}>
-          Place bet
-        </button>
-        {mode === 'crash_dual' && (
-          <button className="button button--secondary" type="button" onClick={cashout} disabled={!canCashout}>
-            Cash out
-          </button>
-        )}
-      </div>
-      <span className="text-muted">Betting is available during the betting phase.</span>
+        <MutedText>Betting is available during the betting phase.</MutedText>
+      </CardBody>
     </Card>
   );
 
   const renderMicroCard = () => (
     <Card title="Micro-bets" subtitle="Fine-tune duel combatants">
-      <div className="control-group">
-        <label htmlFor="micro-step">Adjustment step</label>
-        <input
-          id="micro-step"
-          type="number"
-          min={1}
-          value={microStep}
-          onChange={(e) => {
-            const next = Number(e.target.value);
-            setMicroStep(Number.isFinite(next) ? Math.max(1, Math.min(50, Math.floor(next))) : 1);
-          }}
-        />
-      </div>
-      {!canAdjustMicro && <Badge tone="warning">Switch to duel mode to adjust stats</Badge>}
-      <div className="micro-grid">
-        {(['A', 'B'] as const).map((target) => (
-          <div key={target} className="micro-side">
-            <div className="micro-side-header">
-              <Badge tone="secondary">Side {target}</Badge>
-            </div>
-            <div className="micro-stat">
-              <MetricRow label="Speed" value={duelRound?.micro?.[target]?.speed ?? 0} />
-              <div className="micro-controls">
-                <button
-                  className="button button--secondary"
-                  type="button"
-                  onClick={() => adjustMicro(target, 'speed', microStep)}
-                  disabled={!canAdjustMicro}
-                >
-                  +{microStep}
-                </button>
-                <button
-                  className="button button--muted"
-                  type="button"
-                  onClick={() => adjustMicro(target, 'speed', -microStep)}
-                  disabled={!canAdjustMicro}
-                >
-                  -{microStep}
-                </button>
+      <CardBody>
+        <div className="control-group">
+          <label htmlFor="micro-step">Adjustment step</label>
+          <input
+            id="micro-step"
+            type="number"
+            min={1}
+            value={microStep}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              setMicroStep(Number.isFinite(next) ? Math.max(1, Math.min(50, Math.floor(next))) : 1);
+            }}
+          />
+        </div>
+        {!canAdjustMicro && <Badge tone="warning">Switch to duel mode to adjust stats</Badge>}
+        <div className="micro-grid">
+          {(['A', 'B'] as const).map((target) => (
+            <div key={target} className="micro-side">
+              <div className="micro-side-header">
+                <Badge tone="secondary">Side {target}</Badge>
+              </div>
+              <div className="micro-stat">
+                <MetricRow label="Speed" value={duelRound?.micro?.[target]?.speed ?? 0} />
+                <div className="micro-controls">
+                  <button
+                    className="button button--secondary"
+                    type="button"
+                    onClick={() => adjustMicro(target, 'speed', microStep)}
+                    disabled={!canAdjustMicro}
+                  >
+                    +{microStep}
+                  </button>
+                  <button
+                    className="button button--muted"
+                    type="button"
+                    onClick={() => adjustMicro(target, 'speed', -microStep)}
+                    disabled={!canAdjustMicro}
+                  >
+                    -{microStep}
+                  </button>
+                </div>
+              </div>
+              <div className="micro-stat">
+                <MetricRow label="Defense" value={duelRound?.micro?.[target]?.defense ?? 0} />
+                <div className="micro-controls">
+                  <button
+                    className="button button--secondary"
+                    type="button"
+                    onClick={() => adjustMicro(target, 'defense', microStep)}
+                    disabled={!canAdjustMicro}
+                  >
+                    +{microStep}
+                  </button>
+                  <button
+                    className="button button--muted"
+                    type="button"
+                    onClick={() => adjustMicro(target, 'defense', -microStep)}
+                    disabled={!canAdjustMicro}
+                  >
+                    -{microStep}
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="micro-stat">
-              <MetricRow label="Defense" value={duelRound?.micro?.[target]?.defense ?? 0} />
-              <div className="micro-controls">
-                <button
-                  className="button button--secondary"
-                  type="button"
-                  onClick={() => adjustMicro(target, 'defense', microStep)}
-                  disabled={!canAdjustMicro}
-                >
-                  +{microStep}
-                </button>
-                <button
-                  className="button button--muted"
-                  type="button"
-                  onClick={() => adjustMicro(target, 'defense', -microStep)}
-                  disabled={!canAdjustMicro}
-                >
-                  -{microStep}
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </CardBody>
     </Card>
   );
 
   const renderArenaCard = () => (
-    <Card title="Game arena" subtitle={modeLabel} bodyClassName="arena-body">
-      <div className="arena-grid">
-        <div className="arena-stage">
-          {mode === 'crash_dual' && crashRound && (
-            <CrashDualCanvas
-              mA={crashRound.mA}
-              mB={crashRound.mB}
-              targetA={crashRound.targetA}
-              targetB={crashRound.targetB}
-              phase={crashRound.phase}
-            />
-          )}
-          {mode === 'duel_ab' && duelRound && (
-            <DuelABPanel micro={duelRound.micro} phase={duelRound.phase} winner={duelRound.winner} />
-          )}
-          {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
-            <div className="arena-empty">No round data yet</div>
-          )}
-        </div>
-        <aside className="arena-sidebar">
-          <div className="arena-sidebar-title">Round parameters</div>
-          <div className="arena-parameters">
-            {parameterMetrics.length === 0 && <span className="text-muted">Waiting for round data…</span>}
-            {parameterMetrics.map((metric) => (
-              <MetricRow key={String(metric.label)} label={metric.label} value={metric.value} hint={metric.hint} />
-            ))}
+    <Card title="Game arena" subtitle={modeLabel}>
+      <ArenaCardBody>
+        <div className="arena-grid">
+          <div className="arena-stage">
+            {mode === 'crash_dual' && crashRound && (
+              <CrashDualCanvas
+                mA={crashRound.mA}
+                mB={crashRound.mB}
+                targetA={crashRound.targetA}
+                targetB={crashRound.targetB}
+                phase={crashRound.phase}
+              />
+            )}
+            {mode === 'duel_ab' && duelRound && (
+              <DuelABPanel micro={duelRound.micro} phase={duelRound.phase} winner={duelRound.winner} />
+            )}
+            {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
+              <div className="arena-empty">No round data yet</div>
+            )}
           </div>
-        </aside>
-      </div>
+          <aside className="arena-sidebar">
+            <div className="arena-sidebar-title">Round parameters</div>
+            <div className="arena-parameters">
+              {parameterMetrics.length === 0 && <MutedText>Waiting for round data…</MutedText>}
+              {parameterMetrics.map((metric) => (
+                <MetricRow key={String(metric.label)} label={metric.label} value={metric.value} hint={metric.hint} />
+              ))}
+            </div>
+          </aside>
+        </div>
+      </ArenaCardBody>
     </Card>
   );
 
   const renderInvestorCard = () => (
     <Card title="Investor panel" subtitle="House overview">
-      <MetricRow
-        label="Connection"
-        value={<Badge tone={connectionTone}>{connectionLabel}</Badge>}
-        hint={isLive ? 'Realtime updates active' : 'Reconnect to resume updates'}
-      />
-      <MetricRow label="Bankroll" value={formatCents(snap?.bankroll ?? 0)} />
-      <MetricRow label="Jackpot" value={formatCents(snap?.jackpot ?? 0)} />
-      <MetricRow label="RTP average" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} />
-      <MetricRow label="Total rounds" value={snap?.rounds ?? 0} />
+      <CardBody>
+        <MetricRow
+          label="Connection"
+          value={<Badge tone={connectionTone}>{connectionLabel}</Badge>}
+          hint={isLive ? 'Realtime updates active' : 'Reconnect to resume updates'}
+        />
+        <MetricRow label="Bankroll" value={formatCents(snap?.bankroll ?? 0)} />
+        <MetricRow label="Jackpot" value={formatCents(snap?.jackpot ?? 0)} />
+        <MetricRow label="RTP average" value={`${(snap?.rtpAvg ?? 0).toFixed(2)}%`} />
+        <MetricRow label="Total rounds" value={snap?.rounds ?? 0} />
+      </CardBody>
     </Card>
   );
 
   const renderStatsCard = () => (
     <Card title="Round statistics" subtitle="Performance snapshot">
-      <MetricRow label="Completed rounds" value={roundStats?.totalRounds ?? snap?.rounds ?? 0} />
-      <MetricRow label="Crash rounds" value={roundStats?.crashRounds ?? 0} />
-      <MetricRow label="Duel rounds" value={roundStats?.duelRounds ?? 0} />
-      <MetricRow label="Total wagers" value={formatCents(roundStats?.totalWagered ?? 0)} />
-      <MetricRow label="Operator profit" value={formatCents(roundStats?.operatorProfit ?? 0)} />
-      <MetricRow
-        label="Operator edge"
-        value={formatPercent(roundStats?.operatorEdge ?? 0)}
-        hint={`Target ${formatPercent(roundStats?.operatorEdgeTarget ?? 4)}`}
-      />
+      <CardBody>
+        <MetricRow label="Completed rounds" value={roundStats?.totalRounds ?? snap?.rounds ?? 0} />
+        <MetricRow label="Crash rounds" value={roundStats?.crashRounds ?? 0} />
+        <MetricRow label="Duel rounds" value={roundStats?.duelRounds ?? 0} />
+        <MetricRow label="Total wagers" value={formatCents(roundStats?.totalWagered ?? 0)} />
+        <MetricRow label="Operator profit" value={formatCents(roundStats?.operatorProfit ?? 0)} />
+        <MetricRow
+          label="Operator edge"
+          value={formatPercent(roundStats?.operatorEdge ?? 0)}
+          hint={`Target ${formatPercent(roundStats?.operatorEdgeTarget ?? 4)}`}
+        />
+      </CardBody>
     </Card>
   );
 
   const renderTotalsCard = () => (
     <Card title="Round totals" subtitle={`${modeLabel} pools`}>
-      {mode === 'crash_dual' && crashRound && (
-        <>
-          <MetricRow label="Total pool" value={formatCents(crashTotals.totalA + crashTotals.totalB)} />
-          <MetricRow label="Side A" value={formatCents(crashTotals.totalA)} hint={`${crashTotals.countA} bets`} />
-          <MetricRow label="Side B" value={formatCents(crashTotals.totalB)} hint={`${crashTotals.countB} bets`} />
-          <MetricRow label="Burned" value={formatCents(crashRound.burned)} />
-          <MetricRow label="Payouts" value={formatCents(crashRound.payouts)} />
-        </>
-      )}
-      {mode === 'duel_ab' && duelRound && (
-        <>
-          <MetricRow label="Total pot" value={formatCents(duelTotals.total)} />
-          <MetricRow label="Side A" value={formatCents(duelTotals.totalA)} hint={`${duelTotals.countA} bets`} />
-          <MetricRow label="Side B" value={formatCents(duelTotals.totalB)} hint={`${duelTotals.countB} bets`} />
-          <MetricRow label="Winner" value={duelRound.winner ?? '—'} />
-        </>
-      )}
-      {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
-        <span className="text-muted">Totals will appear when a round begins.</span>
-      )}
+      <CardBody>
+        {mode === 'crash_dual' && crashRound && (
+          <>
+            <MetricRow label="Total pool" value={formatCents(crashTotals.totalA + crashTotals.totalB)} />
+            <MetricRow label="Side A" value={formatCents(crashTotals.totalA)} hint={`${crashTotals.countA} bets`} />
+            <MetricRow label="Side B" value={formatCents(crashTotals.totalB)} hint={`${crashTotals.countB} bets`} />
+            <MetricRow label="Burned" value={formatCents(crashRound.burned)} />
+            <MetricRow label="Payouts" value={formatCents(crashRound.payouts)} />
+          </>
+        )}
+        {mode === 'duel_ab' && duelRound && (
+          <>
+            <MetricRow label="Total pot" value={formatCents(duelTotals.total)} />
+            <MetricRow label="Side A" value={formatCents(duelTotals.totalA)} hint={`${duelTotals.countA} bets`} />
+            <MetricRow label="Side B" value={formatCents(duelTotals.totalB)} hint={`${duelTotals.countB} bets`} />
+            <MetricRow label="Winner" value={duelRound.winner ?? '—'} />
+          </>
+        )}
+        {!((mode === 'crash_dual' && crashRound) || (mode === 'duel_ab' && duelRound)) && (
+          <MutedText>Totals will appear when a round begins.</MutedText>
+        )}
+      </CardBody>
     </Card>
   );
 
   const renderEventsCard = () => (
     <Card title="Events" subtitle="Latest activity">
-      {events.length === 0 ? (
-        <span className="text-muted">No events yet. Place a bet to get started.</span>
-      ) : (
-        <ul className="event-list">
-          {events.map((entry) => (
-            <li key={entry.id} className="event-item">
-              <span className="event-time">{eventTime(entry.ts)}</span>
-              <span className="event-text">{entry.text}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <CardBody>
+        {events.length === 0 ? (
+          <MutedText>No events yet. Place a bet to get started.</MutedText>
+        ) : (
+          <ul className="event-list">
+            {events.map((entry) => (
+              <li key={entry.id} className="event-item">
+                <span className="event-time">{eventTime(entry.ts)}</span>
+                <span className="event-text">{entry.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
     </Card>
   );
 
