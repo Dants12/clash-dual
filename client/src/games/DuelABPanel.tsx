@@ -2,19 +2,19 @@ import styled from 'styled-components';
 import { Badge, type BadgeTone } from '../ui/Badge';
 import { MetricRow } from '../ui/MetricRow';
 
-const DuelArena = styled.div`
+const ArenaContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: var(--gap-md);
 `;
 
-const DuelArenaRow = styled.div`
+const ArenaSidesRow = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--gap-md);
 `;
 
-const DuelArenaSide = styled.div`
+const ArenaSideCard = styled.div`
   background: var(--color-panel-alt);
   border-radius: var(--radius-md);
   border: 1px solid var(--color-panel-border-strong);
@@ -24,7 +24,7 @@ const DuelArenaSide = styled.div`
   gap: var(--gap-sm);
 `;
 
-const DuelArenaStatus = styled.div`
+const ArenaStatusPanel = styled.div`
   display: flex;
   gap: var(--gap-sm);
   flex-wrap: wrap;
@@ -47,24 +47,24 @@ interface DuelABPanelProps {
 
 export default function DuelABPanel({ micro, winner, phase }: DuelABPanelProps) {
   return (
-    <DuelArena>
-      <DuelArenaRow>
+    <ArenaContainer>
+      <ArenaSidesRow>
         {(['A', 'B'] as const).map((side) => (
-          <DuelArenaSide key={side}>
+          <ArenaSideCard key={side}>
             <Badge tone="secondary">Side {side}</Badge>
             <MetricRow label="Speed" value={micro?.[side]?.speed ?? 0} />
             <MetricRow label="Defense" value={micro?.[side]?.defense ?? 0} />
-          </DuelArenaSide>
+          </ArenaSideCard>
         ))}
-      </DuelArenaRow>
-      <DuelArenaStatus>
+      </ArenaSidesRow>
+      <ArenaStatusPanel>
         <Badge tone={phaseTone[phase] ?? 'muted'}>Phase: {phase}</Badge>
         {winner ? (
           <Badge tone="success">Winner: {winner}</Badge>
         ) : (
           <Badge tone="muted">Awaiting result</Badge>
         )}
-      </DuelArenaStatus>
-    </DuelArena>
+      </ArenaStatusPanel>
+    </ArenaContainer>
   );
 }
