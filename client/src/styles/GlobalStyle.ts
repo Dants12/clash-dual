@@ -878,35 +878,6 @@ input[type='range'] {
   gap: var(--gap-sm);
 }
 
-.duel-arena {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-md);
-}
-
-.duel-arena-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--gap-md);
-}
-
-.duel-arena-side {
-  background: var(--color-panel-alt);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-panel-border-strong);
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-sm);
-}
-
-.duel-arena-status {
-  display: flex;
-  gap: var(--gap-sm);
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
 .event-list {
   list-style: none;
   margin: 0;
