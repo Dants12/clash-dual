@@ -1,70 +1,24 @@
-import styled from 'styled-components';
-import { Badge, type BadgeTone } from '../ui/Badge';
-import { MetricRow } from '../ui/MetricRow';
+import React from 'react';
+import Panel from '../ui/Panel';
 
-const ArenaContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-md);
-`;
 
-const ArenaSidesRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--gap-md);
-`;
-
-const ArenaSideCard = styled.div`
-  background: var(--color-panel-alt);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-panel-border-strong);
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-sm);
-`;
-
-const ArenaStatusPanel = styled.div`
-  display: flex;
-  gap: var(--gap-sm);
-  flex-wrap: wrap;
-  justify-content: center;
-`;
-
-const phaseTone: Record<string, BadgeTone> = {
-  betting: 'primary',
-  running: 'success',
-  resolve: 'warning',
-  crash: 'danger',
-  intermission: 'muted'
-};
-
-interface DuelABPanelProps {
-  micro: { A: { speed: number; defense: number }; B: { speed: number; defense: number } };
-  winner?: 'A' | 'B';
-  phase: string;
-}
-
-export default function DuelABPanel({ micro, winner, phase }: DuelABPanelProps) {
-  return (
-    <ArenaContainer>
-      <ArenaSidesRow>
-        {(['A', 'B'] as const).map((side) => (
-          <ArenaSideCard key={side}>
-            <Badge tone="secondary">Side {side}</Badge>
-            <MetricRow label="Speed" value={micro?.[side]?.speed ?? 0} />
-            <MetricRow label="Defense" value={micro?.[side]?.defense ?? 0} />
-          </ArenaSideCard>
-        ))}
-      </ArenaSidesRow>
-      <ArenaStatusPanel>
-        <Badge tone={phaseTone[phase] ?? 'muted'}>Phase: {phase}</Badge>
-        {winner ? (
-          <Badge tone="success">Winner: {winner}</Badge>
-        ) : (
-          <Badge tone="muted">Awaiting result</Badge>
-        )}
-      </ArenaStatusPanel>
-    </ArenaContainer>
-  );
+export default function DuelABPanel({micro, winner, phase}:{micro:any; winner?:'A'|'B'; phase:string}){
+return (
+<Panel title="Duel A vs B">
+<div className="row" style={{gap:16}}>
+<div style={{flex:1}}>
+<b>A</b>
+<div className="muted">Speed: {micro?.A?.speed||0}</div>
+<div className="muted">Defense: {micro?.A?.defense||0}</div>
+</div>
+<div style={{flex:1}}>
+<b>B</b>
+<div className="muted">Speed: {micro?.B?.speed||0}</div>
+<div className="muted">Defense: {micro?.B?.defense||0}</div>
+</div>
+</div>
+<div className="space" />
+<div className="muted">Phase: {phase} {winner?`• Winner: ${winner}`:''}</div>
+</Panel>
+);
 }

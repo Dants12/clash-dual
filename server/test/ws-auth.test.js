@@ -63,14 +63,13 @@ test('allows betting and cashing out on the same authenticated socket', async (t
     env: { ...process.env, PORT: String(PORT) },
     stdio: ['ignore', 'pipe', 'pipe']
   });
-  t.after(async () => {
+  t.after(() => {
     server.kill('SIGTERM');
-    await once(server, 'exit');
   });
 
   await once(server.stdout, 'data');
 
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
   t.after(() => {
     ws.close();
   });
@@ -82,7 +81,7 @@ test('allows betting and cashing out on the same authenticated socket', async (t
   const hello = await messages.waitFor((msg) => msg.t === 'hello');
   assert.ok(typeof hello.uid === 'string' && hello.uid.length > 0);
 
-  ws.send(JSON.stringify({ t: 'bet', amount: 50, side: 'A', betId: 'bet-auth-1' }));
+  ws.send(JSON.stringify({ t: 'bet', amount: 50, side: 'A' }));
   const betSnapshot = await messages.waitFor((msg) => {
     if (msg.t !== 'snapshot') return false;
     const bet = getCrashBet(msg.snapshot, hello.uid);

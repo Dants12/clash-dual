@@ -2,18 +2,11 @@ export type GameMode = 'crash_dual' | 'duel_ab';
 export type Side = 'A' | 'B';
 
 export interface ClientAuth { uid: string; }
-export type Amount = bigint;
-
-export type DeterministicSampler = (index: number) => number;
-
-export interface Wallet {
-  balance: Amount;
-}
+export interface Wallet { balance: number; }
 
 export interface Bet {
-  id: string;
   uid: string;
-  amount: Amount;
+  amount: number;
   side?: Side;
   cashedOut?: boolean;
   cashoutAt?: number;
@@ -30,11 +23,8 @@ export interface CrashRound {
   mB: number;
   betsA: Bet[];
   betsB: Bet[];
-  burned: Amount;
-  payouts: Amount;
-  seenBetIds: Set<string>;
-  fair: CrashFairInfo;
-  streamB: CrashRoundStream;
+  burned: number;
+  payouts: number;
 }
 
 export interface DuelRound {
@@ -45,116 +35,28 @@ export interface DuelRound {
   micro: { A: { speed: number; defense: number }, B: { speed: number; defense: number } };
   bets: Bet[];
   winner?: Side;
-  seenBetIds: Set<string>;
-  runtimeExtraMs: number;
-  fair: DuelFairInfo;
-}
-
-export interface BaseFairInfo {
-  serverSeedHash: string;
-  clientSeed: string;
-  nonce: number;
-  serverSeed?: string;
-}
-
-export interface CrashFairStreamInfo {
-  steps: number;
-  valuesUsed: number;
-}
-
-export interface CrashFairInfo extends BaseFairInfo {
-  bStream: CrashFairStreamInfo;
-}
-
-export interface CrashRoundStream {
-  sampler: DeterministicSampler;
-  steps: number;
-  valuesUsed: number;
-}
-
-export interface DuelFairInfo extends BaseFairInfo {
-  roll?: number;
-  pA?: number;
-  pB?: number;
-}
-
-export interface RoundStats {
-  totalRounds: number;
-  crashRounds: number;
-  duelRounds: number;
-  totalWagered: number;
-  totalPayouts: number;
-  operatorProfit: number;
-  operatorEdge: number;
-  operatorEdgeTarget: number;
-}
-
-export interface BetSnapshot extends Omit<Bet, 'amount'> {
-  amount: number;
-}
-
-export interface CrashRoundSnapshot extends Omit<CrashRound, 'betsA' | 'betsB' | 'burned' | 'payouts' | 'seenBetIds' | 'streamB'> {
-  betsA: BetSnapshot[];
-  betsB: BetSnapshot[];
-  burned: number;
-  payouts: number;
-}
-
-export interface DuelRoundSnapshot extends Omit<DuelRound, 'bets' | 'seenBetIds'> {
-  bets: BetSnapshot[];
 }
 
 export interface Snapshot {
   mode: GameMode;
-  crash?: CrashRoundSnapshot;
-  duel?: DuelRoundSnapshot;
+  crash?: CrashRound;
+  duel?: DuelRound;
   bankroll: number;
   jackpot: number;
   rtpAvg: number;
   rounds: number;
-  stats: RoundStats;
 }
 
 export type ClientMsg =
   | { t: 'auth'; uid?: string }
   | { t: 'switch_mode'; mode: GameMode }
-  | { t: 'bet'; amount: number; side?: Side; betId: string }
+  | { t: 'bet'; amount: number; side?: Side }
   | { t: 'cashout' }
-  | { t: 'micro'; what: 'speed' | 'defense'; side: Side; value: number }
-  | { t: 'topup'; amount: number }
-  | { t: 'ping' }
-  | { t: 'fair'; mode: GameMode; nonce?: number };
+  | { t: 'micro'; what: 'speed' | 'defense'; side: Side; value: number };
 
 export type ServerMsg =
-  | { t: 'hello'; uid: string; wallet: WalletSnapshot; snapshot: Snapshot }
-  | { t: 'wallet'; wallet: WalletSnapshot }
+  | { t: 'hello'; uid: string; wallet: Wallet; snapshot: Snapshot }
+  | { t: 'wallet'; wallet: Wallet }
   | { t: 'snapshot'; snapshot: Snapshot }
   | { t: 'event'; kind: string; payload?: any }
-  | { t: 'error'; message: string }
-  | FairServerMsg;
-
-export interface WalletSnapshot {
-  balance: number;
-}
-
-export type FairServerMsg =
-  | {
-      t: 'fair';
-      mode: 'crash_dual';
-      nonce: number;
-      roundId: string;
-      clientSeed: string;
-      serverSeedHash: string;
-      serverSeed?: string;
-      crash?: { targetA: number; targetB: number; bStream: CrashFairStreamInfo };
-    }
-  | {
-      t: 'fair';
-      mode: 'duel_ab';
-      nonce: number;
-      roundId: string;
-      clientSeed: string;
-      serverSeedHash: string;
-      serverSeed?: string;
-      duel?: { roll?: number; pA?: number; pB?: number; winner?: Side };
-    };
+  | { t: 'error'; message: string };

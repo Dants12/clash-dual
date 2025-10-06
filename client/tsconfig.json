@@ -6,12 +6,8 @@
 "jsx": "react-jsx",
 "moduleResolution": "Bundler",
 "strict": true,
-    "skipLibCheck": true,
-    "baseUrl": ".",
-    "noEmit": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitOverride": true
+"skipLibCheck": true,
+"baseUrl": "."
 },
 "include": ["src"]
 }

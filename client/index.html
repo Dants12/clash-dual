@@ -1,30 +1,24 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Clash Dual is a realtime crash and duel playground for experimenting with casino-style mechanics."
-    />
-    <meta name="theme-color" content="#131937" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <title>Clash Dual · Realtime Crash & Duel Playground</title>
-  </head>
-  <body>
-    <noscript>
-      <div class="app-shell">
-        <div class="app-header__lead" style="padding: 24px; text-align: center;">
-          Clash Dual requires JavaScript to run. Please enable it to use the simulator.
-        </div>
-      </div>
-    </noscript>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clash Dual</title>
+<style>
+body { margin:0; font-family: ui-sans-serif, system-ui; background:#0b1220; color:#d7e0ff; }
+.wrap { display:grid; grid-template-columns: 320px 1fr 360px; gap:16px; padding:16px; }
+.card { background:#0e1626; border:1px solid #1a2540; border-radius:12px; padding:12px; box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset; }
+button { background:#1f2a44; color:#d7e0ff; border:1px solid #2a3a63; border-radius:8px; padding:6px 10px; cursor:pointer }
+input { background:#0b1220; color:#fff; border:1px solid #2a3a63; border-radius:8px; padding:6px; width:100% }
+.row { display:flex; gap:8px; align-items:center; }
+.space { height:8px }
+canvas { background:#0b1220; border:1px solid #1a2540; border-radius:12px; }
+.title { font-weight:700; color:#9bb1ff; }
+.muted { color:#7992d4; font-size:12px }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
+</body>
 </html>

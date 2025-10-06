@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import WebSocket from 'ws';
 
-const PORT = 19083;
+const PORT = 19082;
 
 function createMessageQueue(ws) {
   const queue = [];
@@ -53,14 +53,13 @@ test('rejects duel bets without a side without charging the wallet', async (t) =
     env: { ...process.env, PORT: String(PORT) },
     stdio: ['ignore', 'pipe', 'pipe']
   });
-  t.after(async () => {
+  t.after(() => {
     server.kill('SIGTERM');
-    await once(server, 'exit');
   });
 
   await once(server.stdout, 'data');
 
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
   t.after(() => {
     ws.close();
   });
@@ -75,13 +74,13 @@ test('rejects duel bets without a side without charging the wallet', async (t) =
   ws.send(JSON.stringify({ t: 'switch_mode', mode: 'duel_ab' }));
   await messages.waitFor((msg) => msg.t === 'snapshot' && msg.snapshot.mode === 'duel_ab');
 
-  ws.send(JSON.stringify({ t: 'bet', amount: 100, betId: 'bet-duel-1' }));
+  ws.send(JSON.stringify({ t: 'bet', amount: 100 }));
   await assert.rejects(
     messages.waitFor((msg) => msg.t === 'wallet', 1000),
     /Timed out/
   );
 
-  ws.send(JSON.stringify({ t: 'bet', amount: 100, side: 'A', betId: 'bet-duel-2' }));
+  ws.send(JSON.stringify({ t: 'bet', amount: 100, side: 'A' }));
   const walletUpdate = await messages.waitFor((msg) => msg.t === 'wallet');
   assert.equal(walletUpdate.wallet.balance, hello.wallet.balance - 100);
 
