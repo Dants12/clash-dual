@@ -61,7 +61,6 @@ function tryCashoutCrash(uid: string) {
         const win = b.amount * b.cashoutAt;
         const rake = win * 0.02;
         pay(uid, win - rake);
-        bankroll -= (win - rake);
         done = true;
       }
     }
@@ -94,9 +93,10 @@ setInterval(() => {
     if (crash.phase === 'intermission') {
       const endA = crash.targetA;
       const endB = crash.targetB;
-      let burned = 0, payouts = 0;
+      let burned = 0, payouts = 0, totalStakes = 0;
       for (const [list, final] of [[crash.betsA, endA],[crash.betsB, endB]] as const) {
         for (const b of list) {
+          totalStakes += b.amount;
           if (b.cashedOut && b.cashoutAt && b.cashoutAt < final) {
             const win = b.amount * b.cashoutAt;
             const rake = win * 0.02;
@@ -106,7 +106,7 @@ setInterval(() => {
           }
         }
       }
-      bankroll += burned - payouts;
+      bankroll += totalStakes - payouts;
       jackpot += Math.max(0, burned * 0.01);
       rounds += 1;
       crash = newCrashRound();
