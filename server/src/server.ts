@@ -114,16 +114,18 @@ setInterval(() => {
   } else {
     transitionDuel(duel);
     if (duel.phase === 'intermission') {
-      const burned = duel.bets.reduce((s,b)=> s + b.amount, 0);
-      const winners = duel.bets.filter(b => b.side === duel.winner);
-      const winPool = burned * 0.98;
-      const tot = winners.reduce((s,b)=> s + b.amount, 0) || 1;
+      const stakes = duel.bets.reduce((s, b) => s + b.amount, 0);
+      const winners = duel.bets.filter((b) => b.side === duel.winner);
+      const totalWinnerStakes = winners.reduce((s, b) => s + b.amount, 0) || 1;
+      const winPool = stakes * 0.98;
+      let totalPayout = 0;
       for (const b of winners) {
-        const payout = (b.amount / tot) * winPool;
+        const payout = (b.amount / totalWinnerStakes) * winPool;
         pay(b.uid, payout);
-        bankroll -= payout;
+        totalPayout += payout;
       }
-      jackpot += burned * 0.01;
+      bankroll += stakes - totalPayout;
+      jackpot += stakes * 0.01;
       rounds += 1;
       duel = newDuelRound();
     }
